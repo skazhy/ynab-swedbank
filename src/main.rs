@@ -57,6 +57,20 @@ fn fmt_date(row: &csv::StringRecord) -> String {
         .map_or(String::from(""), |v| v.replace(".", "/"))
 }
 
+fn fmt_id(row: &csv::StringRecord) -> String {
+    // md5 hash of the following:
+    // raw date(2) payee(3) description (4) amount (5) doc. number (11)
+    let ids = [2, 3, 4, 5, 11];
+    let digest = md5::compute(
+        ids.iter().fold("".to_string(), |mut acc, id| {
+            acc.push_str(row.get(*id).unwrap_or(""));
+            acc.push_str("|");
+            acc
+        })
+    );
+    format!("{:x}", digest)
+}
+
 fn run() -> Result<(), Box<Error>> {
     let file_path = get_first_arg()?;
     let file = File::open(file_path)?;
@@ -65,13 +79,14 @@ fn run() -> Result<(), Box<Error>> {
         .from_reader(file);
 
     let mut wtr = csv::Writer::from_path("out.csv")?;
-    wtr.write_record(&["Date", "Payee", "Memo", "Amount"])?;
+    wtr.write_record(&["Id", "Date", "Payee", "Memo", "Amount"])?;
 
     for result in rdr.records() {
         let row = result?;
         // Row field 1: has value "20" for all transactions.
         match row.get(1) {
             Some("20") => wtr.write_record(&[
+                fmt_id(&row),
                 fmt_date(&row),
                 fmt_payee(&row),
                 fmt_memo(&row),

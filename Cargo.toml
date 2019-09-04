@@ -5,3 +5,4 @@ authors = ["Karlis Lauva <karlis@karlis.me>"]
 
 [dependencies]
 csv = "1"
+md5 = "0.6.1"
