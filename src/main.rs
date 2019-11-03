@@ -34,14 +34,14 @@ fn fmt_memo(row: &csv::StringRecord) -> String {
     if !payee.is_empty() && memo.starts_with(payee) {
         String::from("")
     } else {
-        memo
+        memo.replace("'", "")
     }
 }
 
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
 fn fmt_payee(row: &csv::StringRecord) -> String {
     let payee = row.get(3).unwrap_or("");
-    String::from(if payee.is_empty() { "Swedbank" } else { payee })
+    String::from(if payee.is_empty() { "Swedbank" } else { payee }).replace("'", "")
 }
 
 /// Extracts the actual transaction date (MM.DD.YYYY) from the memo string.
