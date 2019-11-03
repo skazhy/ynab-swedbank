@@ -18,30 +18,38 @@ fn prefixed_memo(v: &str) -> bool {
     v.starts_with("PIRKUMS ")
 }
 
+/// Splits the string with given splitter, drops n first items
+/// at joins the string back together
+fn drop_words(s: &str, splitter: &str, n: usize) -> String {
+    s.split(splitter).skip(n)
+        .filter(|x| !x.is_empty())
+        .collect::<Vec<&str>>().join(splitter)
+}
+
+fn remove_memo_prefix(m: &str) -> String {
+    if prefixed_memo(m) { drop_words(m, " ", 6) }
+    else { String::from(m) }.replace("'", "")
+}
+
 /// Formats the memo, removes duplicate payee information
-fn fmt_memo(row: &csv::StringRecord) -> String {
-    let payee = row.get(3).unwrap_or("");
-    let memo = match row.get(4) {
-        Some(r) => {
-            if prefixed_memo(r) {
-                r.split(" ").skip(6)
-                    .filter(|x| !x.is_empty())
-                    .collect::<Vec<&str>>().join(" ")
-            } else { String::from(r) }
-        }
+fn fmt_memo(payee: Option<&str>, memo: Option<&str>) -> String {
+    match memo.map(|m| remove_memo_prefix(m)) {
+        Some(m) => {
+            if payee.map_or(false, |p| m.starts_with(p)) {
+                String::from("")
+            } else { m }
+        },
         _ => String::from("")
-    };
-    if !payee.is_empty() && memo.starts_with(payee) {
-        String::from("")
-    } else {
-        memo.replace("'", "")
     }
 }
 
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
-fn fmt_payee(row: &csv::StringRecord) -> String {
-    let payee = row.get(3).unwrap_or("");
-    String::from(if payee.is_empty() { "Swedbank" } else { payee }).replace("'", "")
+fn fmt_payee(payee: Option<&str>, memo: Option<&str>) -> String {
+    match (payee, memo) {
+        (Some("SumUp"), Some(m)) => drop_words(m, "*", 1),
+        (Some(p), _) => String::from(p).replace("'", ""),
+        _ => String::from("Swedbank")
+    }
 }
 
 /// Extracts the actual transaction date (MM.DD.YYYY) from the memo string.
@@ -83,13 +91,15 @@ fn run() -> Result<(), Box<Error>> {
 
     for result in rdr.records() {
         let row = result?;
+        let payee = row.get(3);
+        let memo = row.get(4);
         // Row field 1: has value "20" for all transactions.
         match row.get(1) {
             Some("20") => wtr.write_record(&[
                 fmt_id(&row),
                 fmt_date(&row),
-                fmt_payee(&row),
-                fmt_memo(&row),
+                fmt_payee(payee, memo),
+                fmt_memo(payee, memo),
                 fmt_amount(&row)])?,
             _ => continue
         };
