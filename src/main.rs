@@ -79,7 +79,7 @@ fn fmt_id(row: &csv::StringRecord) -> String {
     format!("{:x}", digest)
 }
 
-fn run() -> Result<(), Box<Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     let file_path = get_first_arg()?;
     let file = File::open(file_path)?;
     let mut rdr = csv::ReaderBuilder::new()
@@ -108,7 +108,7 @@ fn run() -> Result<(), Box<Error>> {
     Ok(())
 }
 
-fn get_first_arg() -> Result<OsString, Box<Error>> {
+fn get_first_arg() -> Result<OsString, Box<dyn Error>> {
     match env::args_os().nth(1) {
         None => Err(From::from("expected 1 argument, but got none")),
         Some(file_path) => Ok(file_path),
