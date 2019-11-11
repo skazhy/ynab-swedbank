@@ -1,8 +1,9 @@
-use std::env;
 use std::error::Error;
-use std::ffi::OsString;
 use std::fs::File;
 use std::process;
+
+extern crate clap;
+use clap::{Arg, App};
 
 fn fmt_amount(row: &csv::StringRecord) -> String {
     // Row field 7: "D" (debit) - outbound, "K" (credit) - inbound.
@@ -79,9 +80,8 @@ fn fmt_id(row: &csv::StringRecord) -> String {
     format!("{:x}", digest)
 }
 
-fn run() -> Result<(), Box<dyn Error>> {
-    let file_path = get_first_arg()?;
-    let file = File::open(file_path)?;
+fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    let file = File::open(args.value_of("CSV_PATH").unwrap())?;
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_reader(file);
@@ -108,15 +108,15 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_first_arg() -> Result<OsString, Box<dyn Error>> {
-    match env::args_os().nth(1) {
-        None => Err(From::from("expected 1 argument, but got none")),
-        Some(file_path) => Ok(file_path),
-    }
-}
-
 fn main() {
-    if let Err(err) = run() {
+    let args = App::new(env!("CARGO_PKG_NAME"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .arg(Arg::with_name("CSV_PATH")
+            .help("Path for Swedbank CSV export")
+            .required(true))
+        .get_matches();
+
+    if let Err(err) = run(args) {
         println!("{}", err);
         process::exit(1);
     }
