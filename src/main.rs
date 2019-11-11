@@ -91,8 +91,8 @@ fn run() -> Result<(), Box<Error>> {
 
     for result in rdr.records() {
         let row = result?;
-        let payee = row.get(3);
-        let memo = row.get(4);
+        let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
+        let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
         // Row field 1: has value "20" for all transactions.
         match row.get(1) {
             Some("20") => wtr.write_record(&[
@@ -119,5 +119,26 @@ fn main() {
     if let Err(err) = run() {
         println!("{}", err);
         process::exit(1);
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_absent_payee() {
+        assert_eq!(fmt_payee(None, Some("Payment")), "Swedbank");
+    }
+
+    #[test]
+    fn test_sumup_payee() {
+        assert_eq!(fmt_payee(Some("SumUp"), Some("SumUp  *Foobar 1")), "Foobar 1");
+    }
+
+    #[test]
+    fn test_escapable_payee() {
+        assert_eq!(fmt_payee(Some("'Foobar"), Some("Test")), "Foobar");
     }
 }

@@ -20,3 +20,9 @@ Id,Date,Payee,Memo,Amount
 57ce375b0a2adf54a1426607096eb686,01/09/2019,A STORE,,"-1,00"
 05f46d30f5dd8f0cc746fd6290bb1cda,04/09/2019,JOHN DOE,Taco Money,"10,65"
 ```
+
+## Testing
+
+```
+cargo test
+```
