@@ -5,12 +5,11 @@ use std::process;
 extern crate clap;
 use clap::{Arg, App};
 
-fn fmt_amount(row: &csv::StringRecord) -> String {
-    // Row field 7: "D" (debit) - outbound, "K" (credit) - inbound.
-    // Field 5 contains the actual amount.
-    match row.get(7) {
-        Some("D") => row.get(5).map_or(String::from(""), |v| format!("-{}", &v)),
-        Some("K") => String::from(row.get(5).unwrap_or("")),
+fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> String {
+    // tx_type field 7: "D" (debit) - outbound, "K" (credit) - inbound.
+    match tx_type {
+        Some("D") => amount.map_or(String::from(""), |v| format!("-{}", &v)),
+        Some("K") => String::from(amount.unwrap_or("")),
         _ => String::from("")
     }
 }
@@ -54,19 +53,18 @@ fn fmt_payee(payee: Option<&str>, memo: Option<&str>) -> String {
 }
 
 /// Extracts the actual transaction date (MM.DD.YYYY) from the memo string.
-fn extract_transaction_date(row: &csv::StringRecord) -> Option<&str> {
-    // Pattern: "PIRKUMS 1234 07.07.2019 1.00 EUR (975255) RIMI"
-    row.get(4)
-        .and_then(|v| if prefixed_memo(v) { v.split(" ").nth(2) } else { None })
+fn extract_transaction_date(memo: Option<&str>) -> Option<&str> {
+    memo.and_then(|v| if prefixed_memo(v) { v.split(" ").nth(2) } else { None })
 }
 
-fn fmt_date(row: &csv::StringRecord) -> String {
-    extract_transaction_date(&row)
-        .or(row.get(2))
-        .map_or(String::from(""), |v| v.replace(".", "/"))
+fn fmt_date(date: Option<&str>, memo: Option<&str>) -> String {
+    match extract_transaction_date(memo).or(date) {
+        Some(d) => d.replace(".", "/"),
+        None => String::from("")
+    }
 }
 
-fn fmt_id(row: &csv::StringRecord) -> String {
+fn row_hash(row: &csv::StringRecord) -> String {
     // md5 hash of the following:
     // raw date(2) payee(3) description (4) amount (5) doc. number (11)
     let ids = [2, 3, 4, 5, 11];
@@ -96,11 +94,11 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         // Row field 1: has value "20" for all transactions.
         match row.get(1) {
             Some("20") => wtr.write_record(&[
-                fmt_id(&row),
-                fmt_date(&row),
+                row_hash(&row),
+                fmt_date(row.get(2), memo),
                 fmt_payee(payee, memo),
                 fmt_memo(payee, memo),
-                fmt_amount(&row)])?,
+                fmt_amount(row.get(5), row.get(7))])?,
             _ => continue
         };
     };
@@ -140,5 +138,36 @@ mod tests {
     #[test]
     fn test_escapable_payee() {
         assert_eq!(fmt_payee(Some("'Foobar"), Some("Test")), "Foobar");
+    }
+
+    #[test]
+    fn test_memo_tx_date() {
+        assert_eq!(
+            extract_transaction_date(
+                Some("PIRKUMS 1234 07.07.2019 1.00 EUR (975255) RIMI")),
+                Some("07.07.2019")
+        );
+    }
+
+    #[test]
+    fn test_memo_no_tx() {
+        assert_eq!(extract_transaction_date(Some("Cash Money")), None);
+        assert_eq!(extract_transaction_date(None), None);
+    }
+
+    #[test]
+    fn test_tx_date() {
+        assert_eq!(fmt_date(Some("2019.01.01"), Some("Cash Money")), String::from("2019/01/01"));
+        assert_eq!(fmt_date(Some("2019.01.01"), None), String::from("2019/01/01"));
+    }
+
+    #[test]
+    fn test_debit_amount() {
+        assert_eq!(fmt_amount(Some("10.00"), Some("D")), "-10.00");
+    }
+
+    #[test]
+    fn test_credit_amount() {
+        assert_eq!(fmt_amount(Some("10.00"), Some("K")), "10.00");
     }
 }
