@@ -150,6 +150,11 @@ mod tests {
     }
 
     #[test]
+    fn test_no_payee_memo() {
+        assert_eq!(fmt_memo(None, Some("Memo!")), "Memo!");
+    }
+
+    #[test]
     fn test_memo_no_tx() {
         assert_eq!(extract_transaction_date(Some("Cash Money")), None);
         assert_eq!(extract_transaction_date(None), None);
