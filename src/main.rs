@@ -84,7 +84,7 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         .delimiter(b';')
         .from_reader(file);
 
-    let mut wtr = csv::Writer::from_path("out.csv")?;
+    let mut wtr = csv::Writer::from_path(args.value_of("output").unwrap_or("out.csv"))?;
     wtr.write_record(&["Id", "Date", "Payee", "Memo", "Amount"])?;
 
     for result in rdr.records() {
@@ -112,6 +112,10 @@ fn main() {
         .arg(Arg::with_name("CSV_PATH")
             .help("Path for Swedbank CSV export")
             .required(true))
+        .arg(Arg::with_name("output")
+            .short("o")
+            .value_name("OUT_PATH")
+            .help("CSV Output path (defaults to out.csv)"))
         .get_matches();
 
     if let Err(err) = run(args) {

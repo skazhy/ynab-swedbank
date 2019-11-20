@@ -5,6 +5,12 @@
 * Install [Rust](https://www.rust-lang.org/learn/get-started)
 * `cargo build`
 
+### Usage
+
+```
+ynab-swed [-o formatted-output.cv] raw-input.csv
+```
+
 `ynab-swed` turns this
 
 ```csv
