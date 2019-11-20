@@ -47,7 +47,7 @@ fn fmt_memo(payee: Option<&str>, memo: Option<&str>) -> String {
 fn fmt_payee(payee: Option<&str>, memo: Option<&str>) -> String {
     match (payee, memo) {
         (Some("SumUp"), Some(m)) => drop_words(m, "*", 1),
-        (Some(p), _) => String::from(p).replace("'", ""),
+        (Some(p), _)  => String::from(p.replace("'", "").trim_start_matches("IZ *")),
         _ => String::from("Swedbank")
     }
 }
@@ -137,6 +137,11 @@ mod tests {
     #[test]
     fn test_sumup_payee() {
         assert_eq!(fmt_payee(Some("SumUp"), Some("SumUp  *Foobar 1")), "Foobar 1");
+    }
+
+    #[test]
+    fn test_izettle_payee() {
+        assert_eq!(fmt_payee(Some("IZ *Payee222"), Some("memo!")), "Payee222");
     }
 
     #[test]
