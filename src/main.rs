@@ -1,6 +1,10 @@
 use std::error::Error;
 use std::fs::File;
 use std::process;
+use std::str::FromStr;
+
+extern crate rust_decimal;
+use rust_decimal::Decimal;
 
 extern crate serde;
 use serde::{Serialize};
@@ -14,16 +18,15 @@ struct Transaction {
     date: String,
     payee: String,
     memo: Option<String>,
-    amount: String
+    amount: Decimal
 }
 
-fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> String {
-    // tx_type field 7: "D" (debit) - outbound, "K" (credit) - inbound.
-    match tx_type {
-        Some("D") => amount.map_or(String::from(""), |v| format!("-{}", &v)),
-        Some("K") => String::from(amount.unwrap_or("")),
-        _ => String::from("")
-    }
+fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> Option<Decimal> {
+    amount.map(|a| Decimal::from_str(&a.replace(",", "."))).and_then(|res| res.ok())
+        .map(|v| match tx_type {
+            Some("D") => - v,
+            _ => v
+        })
 }
 
 fn prefixed_memo(v: &str) -> bool {
@@ -86,19 +89,24 @@ fn row_import_id(row: &csv::StringRecord) -> String {
     format!("{:x}", digest)
 }
 
-fn create_transaction(row: &csv::StringRecord) -> Option<Transaction> {
+fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
     let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
     let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
 
-    match row.get(1) {
-        Some("20") => Some(Transaction {
+    fmt_amount(row.get(5), row.get(7)).map(|a|
+        Transaction {
             import_id: row_import_id(&row),
             date: fmt_date(row.get(2), memo),
             payee: fmt_payee(payee, memo),
             memo: fmt_memo(payee, memo),
-            amount: fmt_amount(row.get(5), row.get(7))
-        }),
-        _ => None
+            amount: a }
+    )
+}
+
+fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
+    match row.get(1) {
+        Some("20") => from_transaction_row(&row),
+            _ => None
     }
 }
 
@@ -112,7 +120,7 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
 
     for result in rdr.records() {
         let row = result?;
-        match create_transaction(&row) {
+        match parse_row(&row) {
             Some(t) => wtr.serialize(t)?,
             _ => continue
         };
@@ -197,11 +205,11 @@ mod tests {
 
     #[test]
     fn test_debit_amount() {
-        assert_eq!(fmt_amount(Some("10.00"), Some("D")), "-10.00");
+        assert_eq!(fmt_amount(Some("12,99"), Some("D")), Some(Decimal::new(-1299, 2)));
     }
 
     #[test]
     fn test_credit_amount() {
-        assert_eq!(fmt_amount(Some("10.00"), Some("K")), "10.00");
+        assert_eq!(fmt_amount(Some("0,49"), Some("K")), Some(Decimal::new(49, 2)));
     }
 }
