@@ -7,3 +7,4 @@ authors = ["Karlis Lauva <karlis@karlis.me>"]
 clap = "2"
 csv = "1"
 md5 = "0.6.1"
+serde = { version = "1.0", features = ["derive"] }

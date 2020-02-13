@@ -2,8 +2,20 @@ use std::error::Error;
 use std::fs::File;
 use std::process;
 
+extern crate serde;
+use serde::{Serialize};
+
 extern crate clap;
 use clap::{Arg, App};
+
+#[derive(Serialize)]
+struct Transaction {
+    import_id: String,
+    date: String,
+    payee: String,
+    memo: Option<String>,
+    amount: String
+}
 
 fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> String {
     // tx_type field 7: "D" (debit) - outbound, "K" (credit) - inbound.
@@ -32,15 +44,11 @@ fn remove_memo_prefix(m: &str) -> String {
 }
 
 /// Formats the memo, removes duplicate payee information
-fn fmt_memo(payee: Option<&str>, memo: Option<&str>) -> String {
-    match memo.map(|m| remove_memo_prefix(m)) {
-        Some(m) => {
-            if payee.map_or(false, |p| m.starts_with(p)) {
-                String::from("")
-            } else { m }
-        },
-        _ => String::from("")
-    }
+fn fmt_memo(payee: Option<&str>, memo: Option<&str>) -> Option<String> {
+    memo.map(|m| remove_memo_prefix(m))
+        .and_then(|m|
+            if payee.map_or(false, |p| m.starts_with(p)) { None }
+            else { Some(m) })
 }
 
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
@@ -78,6 +86,22 @@ fn row_import_id(row: &csv::StringRecord) -> String {
     format!("{:x}", digest)
 }
 
+fn create_transaction(row: &csv::StringRecord) -> Option<Transaction> {
+    let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
+    let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
+
+    match row.get(1) {
+        Some("20") => Some(Transaction {
+            import_id: row_import_id(&row),
+            date: fmt_date(row.get(2), memo),
+            payee: fmt_payee(payee, memo),
+            memo: fmt_memo(payee, memo),
+            amount: fmt_amount(row.get(5), row.get(7))
+        }),
+        _ => None
+    }
+}
+
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let file = File::open(args.value_of("CSV_PATH").unwrap())?;
     let mut rdr = csv::ReaderBuilder::new()
@@ -85,20 +109,11 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         .from_reader(file);
 
     let mut wtr = csv::Writer::from_path(args.value_of("output").unwrap_or("out.csv"))?;
-    wtr.write_record(&["Id", "Date", "Payee", "Memo", "Amount"])?;
 
     for result in rdr.records() {
         let row = result?;
-        let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
-        let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
-        // Row field 1: has value "20" for all transactions.
-        match row.get(1) {
-            Some("20") => wtr.write_record(&[
-                row_import_id(&row),
-                fmt_date(row.get(2), memo),
-                fmt_payee(payee, memo),
-                fmt_memo(payee, memo),
-                fmt_amount(row.get(5), row.get(7))])?,
+        match create_transaction(&row) {
+            Some(t) => wtr.serialize(t)?,
             _ => continue
         };
     };
@@ -160,7 +175,12 @@ mod tests {
 
     #[test]
     fn test_no_payee_memo() {
-        assert_eq!(fmt_memo(None, Some("Memo!")), "Memo!");
+        assert_eq!(fmt_memo(None, Some("Memo!")), Some(String::from("Memo!")));
+    }
+
+    #[test]
+    fn test_discard_memo() {
+        assert_eq!(fmt_memo(Some("Payee"), Some("Payee TX1")), None);
     }
 
     #[test]
