@@ -68,11 +68,8 @@ fn extract_transaction_date(memo: Option<&str>) -> Option<&str> {
     memo.and_then(|v| if prefixed_memo(v) { v.split(" ").nth(2) } else { None })
 }
 
-fn fmt_date(date: Option<&str>, memo: Option<&str>) -> String {
-    match extract_transaction_date(memo).or(date) {
-        Some(d) => d.replace(".", "/"),
-        None => String::from("")
-    }
+fn fmt_date(date: Option<&str>, memo: Option<&str>) -> Option<String> {
+    extract_transaction_date(memo).or(date).map(|d| d.replace(".", "/"))
 }
 
 fn row_import_id(row: &csv::StringRecord) -> String {
@@ -93,20 +90,22 @@ fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
     let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
     let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
 
-    fmt_amount(row.get(5), row.get(7)).map(|a|
-        Transaction {
+    match (fmt_amount(row.get(5), row.get(7)), fmt_date(row.get(2), memo)) {
+        (Some(amount), Some(date)) => Some(Transaction {
             import_id: row_import_id(&row),
-            date: fmt_date(row.get(2), memo),
+            date: date,
             payee: fmt_payee(payee, memo),
             memo: fmt_memo(payee, memo),
-            amount: a }
-    )
+            amount: amount
+        }),
+        _ => None
+    }
 }
 
 fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
     match row.get(1) {
         Some("20") => from_transaction_row(&row),
-            _ => None
+        _ => None
     }
 }
 
@@ -199,8 +198,8 @@ mod tests {
 
     #[test]
     fn test_tx_date() {
-        assert_eq!(fmt_date(Some("2019.01.01"), Some("Cash Money")), String::from("2019/01/01"));
-        assert_eq!(fmt_date(Some("2019.01.01"), None), String::from("2019/01/01"));
+        assert_eq!(fmt_date(Some("2019.01.01"), Some("Cash Money")), Some(String::from("2019/01/01")));
+        assert_eq!(fmt_date(Some("2019.01.01"), None), Some(String::from("2019/01/01")));
     }
 
     #[test]
