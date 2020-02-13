@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 extern crate rust_decimal;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 
 extern crate serde;
 use serde::{Serialize};
@@ -12,7 +13,7 @@ use serde::{Serialize};
 extern crate clap;
 use clap::{Arg, App};
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct Transaction {
     import_id: String,
     date: String,
@@ -68,8 +69,14 @@ fn extract_transaction_date(memo: Option<&str>) -> Option<&str> {
     memo.and_then(|v| if prefixed_memo(v) { v.split(" ").nth(2) } else { None })
 }
 
+fn reorder_date(d: &str) -> String {
+    let mut parts = d.split(".").collect::<Vec<&str>>();
+    parts.reverse();
+    parts.join("-").to_string()
+}
+
 fn fmt_date(date: Option<&str>, memo: Option<&str>) -> Option<String> {
-    extract_transaction_date(memo).or(date).map(|d| d.replace(".", "/"))
+    extract_transaction_date(memo).or(date).map(|d| reorder_date(d))
 }
 
 fn row_import_id(row: &csv::StringRecord) -> String {
@@ -109,22 +116,78 @@ fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
     }
 }
 
+// HTTP output
+
+#[derive(Serialize)]
+struct HttpRequest {
+    transactions: Vec<HttpTransaction>
+}
+
+#[derive(Serialize)]
+struct HttpTransaction {
+    import_id: String,
+    date: String,
+    payee_name: String,
+    memo: Option<String>,
+    // a "milliunit" is used in transactions: https://api.youneedabudget.com/#formats
+    amount: i64,
+    account_id: String
+}
+
+fn from_transaction(tx: Transaction, account_id: &str) -> HttpTransaction {
+    HttpTransaction {
+        import_id: tx.import_id,
+        date: tx.date,
+        payee_name: tx.payee,
+        memo: tx.memo,
+        amount: (tx.amount * Decimal::new(1000, 0)).to_i64().unwrap_or(0),
+        account_id: account_id.to_string()
+    }
+}
+
+fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    let account_id = args.value_of("account").unwrap_or("");
+    let uri = format!(
+        "https://api.youneedabudget.com/v1/budgets/{}/transactions",
+        args.value_of("budget").unwrap_or("")
+    );
+
+    let body = HttpRequest {
+        transactions: txns.iter().cloned().map(|t| from_transaction(t.clone(), account_id)).collect()
+    };
+
+    let client = reqwest::blocking::Client::new();
+    let res = client.post(&uri)
+        .bearer_auth(args.value_of("token").unwrap_or(""))
+        .json(&body)
+        .send()?;
+    println!("{}", res.text()?.to_string());
+    Ok(())
+}
+
+// CSV output
+
+fn write_csv(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+    let mut wtr = csv::Writer::from_path(args.value_of("output").unwrap_or("out.csv"))?;
+    for t in txns {
+        wtr.serialize(t)?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
+//
+
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let file = File::open(args.value_of("CSV_PATH").unwrap())?;
     let mut rdr = csv::ReaderBuilder::new()
         .delimiter(b';')
         .from_reader(file);
-
-    let mut wtr = csv::Writer::from_path(args.value_of("output").unwrap_or("out.csv"))?;
-
-    for result in rdr.records() {
-        let row = result?;
-        match parse_row(&row) {
-            Some(t) => wtr.serialize(t)?,
-            _ => continue
-        };
+    let txns = rdr.records().map(|r| r.ok().and_then(|r| parse_row(&r))).flatten().collect();
+    match args.value_of("csv") {
+        Some("csv") => write_csv(txns, args)?,
+        _ => request(txns, args)?
     };
-    wtr.flush()?;
     Ok(())
 }
 
@@ -134,10 +197,30 @@ fn main() {
         .arg(Arg::with_name("CSV_PATH")
             .help("Path for Swedbank CSV export")
             .required(true))
+        .arg(Arg::with_name("csv")
+            .help("exports to CSV"))
         .arg(Arg::with_name("output")
             .short("o")
             .value_name("OUT_PATH")
             .help("CSV Output path (defaults to out.csv)"))
+        .arg(Arg::with_name("token")
+            .short("t")
+            .required(true)
+            .env("YNAB_TOKEN")
+            .value_name("TOKEN")
+            .help("YNAB personal acces token"))
+        .arg(Arg::with_name("budget")
+            .short("b")
+            .required(true)
+            .env("YNAB_BUDGET")
+            .value_name("BUDGET")
+            .help("YNAB budget id"))
+        .arg(Arg::with_name("account")
+            .short("a")
+            .required(true)
+            .env("YNAB_ACCOUNT")
+            .value_name("ACCOUNT")
+            .help("YNAB account id"))
         .get_matches();
 
     if let Err(err) = run(args) {
@@ -198,8 +281,8 @@ mod tests {
 
     #[test]
     fn test_tx_date() {
-        assert_eq!(fmt_date(Some("2019.01.01"), Some("Cash Money")), Some(String::from("2019/01/01")));
-        assert_eq!(fmt_date(Some("2019.01.01"), None), Some(String::from("2019/01/01")));
+        assert_eq!(fmt_date(Some("09.02.2020"), Some("Cash Money")), Some(String::from("2020-02-09")));
+        assert_eq!(fmt_date(Some("09.02.2020"), None), Some(String::from("2020-02-09")));
     }
 
     #[test]

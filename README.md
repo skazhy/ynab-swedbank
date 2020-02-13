@@ -1,4 +1,8 @@
-# YNAB CSV converter for Swedbank
+# YNAB API client and CSV converter for Swedbank
+
+`ynab-api` knows both how to transform Swedbank CSVs into CSVs supported by
+YNAB & import Swedbank CSVs into YNAB via their API. YNAB API ids can be
+either provided via env vars or through command line options.
 
 ## Setup
 
@@ -8,7 +12,22 @@
 ### Usage
 
 ```
-ynab-swed [-o formatted-output.cv] raw-input.csv
+USAGE:
+    ynab-swed [OPTIONS] <CSV_PATH> -a <ACCOUNT> -b <BUDGET> -t <TOKEN> [csv]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -a <ACCOUNT>         YNAB account id [defaults to env var: YNAB_ACCOUNT]
+    -b <BUDGET>          YNAB budget id [defaults to env var: YNAB_BUDGET]
+    -o <OUT_PATH>        CSV Output path (defaults to out.csv)
+    -t <TOKEN>           YNAB personal access token [defaults to env var YNAB_TOKEN]
+
+ARGS:
+    <CSV_PATH>    Path for Swedbank CSV export [defaults to out.csv]
+    <csv>         exports to CSV
 ```
 
 `ynab-swed` turns this
