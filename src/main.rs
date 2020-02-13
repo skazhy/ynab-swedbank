@@ -64,8 +64,8 @@ fn fmt_date(date: Option<&str>, memo: Option<&str>) -> String {
     }
 }
 
-fn row_hash(row: &csv::StringRecord) -> String {
-    // md5 hash of the following:
+fn row_import_id(row: &csv::StringRecord) -> String {
+    // import id = md5 hash of the following:
     // raw date(2) payee(3) description (4) amount (5) doc. number (11)
     let ids = [2, 3, 4, 5, 11];
     let digest = md5::compute(
@@ -94,7 +94,7 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         // Row field 1: has value "20" for all transactions.
         match row.get(1) {
             Some("20") => wtr.write_record(&[
-                row_hash(&row),
+                row_import_id(&row),
                 fmt_date(row.get(2), memo),
                 fmt_payee(payee, memo),
                 fmt_memo(payee, memo),
