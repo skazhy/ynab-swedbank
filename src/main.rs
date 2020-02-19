@@ -165,17 +165,6 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
     Ok(())
 }
 
-// CSV output
-
-fn write_csv(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let mut wtr = csv::Writer::from_path(args.value_of("output").unwrap_or("out.csv"))?;
-    for t in txns {
-        wtr.serialize(t)?;
-    }
-    wtr.flush()?;
-    Ok(())
-}
-
 //
 
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -184,10 +173,7 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         .delimiter(b';')
         .from_reader(file);
     let txns = rdr.records().map(|r| r.ok().and_then(|r| parse_row(&r))).flatten().collect();
-    match args.value_of("csv") {
-        Some("csv") => write_csv(txns, args)?,
-        _ => request(txns, args)?
-    };
+    request(txns, args)?;
     Ok(())
 }
 
@@ -197,8 +183,6 @@ fn main() {
         .arg(Arg::with_name("CSV_PATH")
             .help("Path for Swedbank CSV export")
             .required(true))
-        .arg(Arg::with_name("csv")
-            .help("exports to CSV"))
         .arg(Arg::with_name("output")
             .short("o")
             .value_name("OUT_PATH")
