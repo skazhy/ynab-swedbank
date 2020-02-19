@@ -13,7 +13,7 @@ use serde::{Serialize};
 extern crate clap;
 use clap::{Arg, App};
 
-#[derive(Serialize, Clone)]
+#[derive(Clone)]
 struct Transaction {
     import_id: String,
     date: String,
