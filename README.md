@@ -15,7 +15,7 @@ This code is available in [csv-export](https://github.com/skazhy/ynab-swedbank/t
 
 ```
 USAGE:
-    ynab-swed [OPTIONS] <CSV_PATH> -a <ACCOUNT> -b <BUDGET> -t <TOKEN>
+    ynab-swed <CSV_PATH> -a <ACCOUNT> -b <BUDGET> -t <TOKEN>
 
 FLAGS:
     -h, --help       Prints help information
@@ -24,7 +24,6 @@ FLAGS:
 OPTIONS:
     -a <ACCOUNT>         YNAB account id [defaults to env var: YNAB_ACCOUNT]
     -b <BUDGET>          YNAB budget id [defaults to env var: YNAB_BUDGET]
-    -o <OUT_PATH>        CSV Output path (defaults to out.csv)
     -t <TOKEN>           YNAB personal access token [defaults to env var YNAB_TOKEN]
 
 ARGS:
