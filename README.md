@@ -10,6 +10,8 @@ This code is available in [csv-export](https://github.com/skazhy/ynab-swedbank/t
 
 * Install [Rust](https://www.rust-lang.org/learn/get-started)
 * `cargo build`
+* Generate a [personal YNAB access token](https://app.youneedabudget.com/settings/developer)
+* Get your account and budget ids from an account url: `https://app.youneedabudget.com/BUDGET_ID/accounts/ACCOUNT_ID`
 
 ### Usage
 
