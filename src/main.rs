@@ -66,13 +66,13 @@ fn fmt_payee(payee: Option<&str>, memo: Option<&str>) -> String {
 
 /// Extracts the actual transaction date (MM.DD.YYYY) from the memo string.
 fn extract_transaction_date(memo: Option<&str>) -> Option<&str> {
-    memo.and_then(|v| if prefixed_memo(v) { v.split(" ").nth(2) } else { None })
+    memo.and_then(|v| if prefixed_memo(v) { v.split(' ').nth(2) } else { None })
 }
 
 fn reorder_date(d: &str) -> String {
-    let mut parts = d.split(".").collect::<Vec<&str>>();
+    let mut parts = d.split('.').collect::<Vec<&str>>();
     parts.reverse();
-    parts.join("-").to_string()
+    parts.join("-")
 }
 
 fn fmt_date(date: Option<&str>, memo: Option<&str>) -> Option<String> {
@@ -100,10 +100,10 @@ fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
     match (fmt_amount(row.get(5), row.get(7)), fmt_date(row.get(2), memo)) {
         (Some(amount), Some(date)) => Some(Transaction {
             import_id: row_import_id(&row),
-            date: date,
+            date,
             payee: fmt_payee(payee, memo),
             memo: fmt_memo(payee, memo),
-            amount: amount
+            amount
         }),
         _ => None
     }
@@ -153,7 +153,7 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
     );
 
     let body = HttpRequest {
-        transactions: txns.iter().cloned().map(|t| from_transaction(t.clone(), account_id)).collect()
+        transactions: txns.iter().cloned().map(|t| from_transaction(t, account_id)).collect()
     };
 
     let client = reqwest::blocking::Client::new();
@@ -161,7 +161,7 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
         .bearer_auth(args.value_of("token").unwrap_or(""))
         .json(&body)
         .send()?;
-    println!("{}", res.text()?.to_string());
+    println!("{}", res.text()?);
     Ok(())
 }
 
