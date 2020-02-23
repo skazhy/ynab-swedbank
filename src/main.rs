@@ -130,6 +130,7 @@ struct HttpTransaction {
     payee_name: String,
     memo: Option<String>,
     // a "milliunit" is used in transactions: https://api.youneedabudget.com/#formats
+    cleared: String,
     amount: i64,
     account_id: String
 }
@@ -140,6 +141,7 @@ fn from_transaction(tx: Transaction, account_id: &str) -> HttpTransaction {
         date: tx.date,
         payee_name: tx.payee,
         memo: tx.memo,
+        cleared: String::from("cleared"),
         amount: (tx.amount * Decimal::new(1000, 0)).to_i64().unwrap_or(0),
         account_id: account_id.to_string()
     }
