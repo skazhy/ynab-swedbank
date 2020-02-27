@@ -48,7 +48,11 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
 
 fn remove_memo_prefix(m: &str) -> String {
     if prefixed_memo(m) {
-        drop_words(m, " ", 6)
+        if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
+            drop_words(m, " ", 13)
+        } else {
+            drop_words(m, " ", 6)
+        }
     } else {
         String::from(m)
     }
@@ -258,6 +262,24 @@ mod tests {
     #[test]
     fn test_escapable_payee() {
         assert_eq!(fmt_payee(Some("'Foobar"), Some("Test")), "Foobar");
+    }
+
+    #[test]
+    fn test_local_memo_prefix_removal() {
+        assert_eq!(
+            remove_memo_prefix("PIRKUMS 1 24.02.2020 1.00 EUR (1) CAFE"),
+            String::from("CAFE")
+        );
+    }
+
+    #[test]
+    fn test_foreign_memo_prefix_removal() {
+        assert_eq!(
+            remove_memo_prefix(
+                "PIRKUMS 1 17.11.2019 2.50 GBP VALŪTAS KURSS 0.856164, KONVERTĀCIJAS MAKSA 0.06 EUR (1) Rapha"
+            ),
+            String::from("Rapha")
+        )
     }
 
     #[test]
