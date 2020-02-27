@@ -90,6 +90,10 @@ fn fmt_date(date: Option<&str>, memo: Option<&str>) -> Option<String> {
     extract_transaction_date(memo).or(date).map(|d| reorder_date(d))
 }
 
+fn non_empty_field(row: &csv::StringRecord, idx: usize) -> Option<&str> {
+    row.get(idx).and_then(|p| Some(p).filter(|p| !p.is_empty()))
+}
+
 fn row_import_id(row: &csv::StringRecord) -> String {
     // import id = md5 hash of the following:
     // raw date(2) payee(3) description (4) amount (5) doc. number (11)
@@ -103,8 +107,8 @@ fn row_import_id(row: &csv::StringRecord) -> String {
 }
 
 fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
-    let payee = row.get(3).and_then(|p| if p.is_empty() { None } else { Some(p) });
-    let memo = row.get(4).and_then(|m| if m.is_empty() { None } else { Some(m) });
+    let payee = non_empty_field(row, 3);
+    let memo = non_empty_field(row, 4);
 
     match (fmt_amount(row.get(5), row.get(7)), fmt_date(row.get(2), memo)) {
         (Some(amount), Some(date)) => Some(Transaction {
