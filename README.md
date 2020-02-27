@@ -37,3 +37,19 @@ ARGS:
 ```
 cargo test
 ```
+
+## Linting and formatting
+
+I'm using [clippy](https://github.com/rust-lang/rust-clippy) for linting &
+`rustfmt` for formatting. I'm using this as a pre-commit hook:
+
+```sh
+#!/bin/sh
+
+for FILE in `git diff --cached --name-only -- \*.rs`; do
+  if ! rustfmt --check -q $FILE > /dev/null; then
+    echo "\033[0;31mAborting:\033[0m invalid formatting in: $FILE"
+    exit 1
+  fi
+done
+```
