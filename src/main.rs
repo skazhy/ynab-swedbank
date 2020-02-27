@@ -4,14 +4,14 @@ use std::process;
 use std::str::FromStr;
 
 extern crate rust_decimal;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 
 extern crate serde;
-use serde::{Serialize};
+use serde::Serialize;
 
 extern crate clap;
-use clap::{Arg, App};
+use clap::{App, Arg};
 
 #[derive(Clone)]
 struct Transaction {
@@ -19,14 +19,16 @@ struct Transaction {
     date: String,
     payee: String,
     memo: Option<String>,
-    amount: Decimal
+    amount: Decimal,
 }
 
 fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> Option<Decimal> {
-    amount.map(|a| Decimal::from_str(&a.replace(",", "."))).and_then(|res| res.ok())
+    amount
+        .map(|a| Decimal::from_str(&a.replace(",", ".")))
+        .and_then(|res| res.ok())
         .map(|v| match tx_type {
-            Some("D") => - v,
-            _ => v
+            Some("D") => -v,
+            _ => v,
         })
 }
 
@@ -37,30 +39,39 @@ fn prefixed_memo(v: &str) -> bool {
 /// Splits the string with given splitter, drops n first items
 /// at joins the string back together
 fn drop_words(s: &str, splitter: &str, n: usize) -> String {
-    s.split(splitter).skip(n)
+    s.split(splitter)
+        .skip(n)
         .filter(|x| !x.is_empty())
-        .collect::<Vec<&str>>().join(splitter)
+        .collect::<Vec<&str>>()
+        .join(splitter)
 }
 
 fn remove_memo_prefix(m: &str) -> String {
-    if prefixed_memo(m) { drop_words(m, " ", 6) }
-    else { String::from(m) }.replace("'", "")
+    if prefixed_memo(m) {
+        drop_words(m, " ", 6)
+    } else {
+        String::from(m)
+    }
+    .replace("'", "")
 }
 
 /// Formats the memo, removes duplicate payee information
 fn fmt_memo(payee: Option<&str>, memo: Option<&str>) -> Option<String> {
-    memo.map(|m| remove_memo_prefix(m))
-        .and_then(|m|
-            if payee.map_or(false, |p| m.starts_with(p)) { None }
-            else { Some(m) })
+    memo.map(|m| remove_memo_prefix(m)).and_then(|m| {
+        if payee.map_or(false, |p| m.starts_with(p)) {
+            None
+        } else {
+            Some(m)
+        }
+    })
 }
 
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
 fn fmt_payee(payee: Option<&str>, memo: Option<&str>) -> String {
     match (payee, memo) {
         (Some("SumUp"), Some(m)) => drop_words(m, "*", 1),
-        (Some(p), _)  => String::from(p.replace("'", "").trim_start_matches("IZ *")),
-        _ => String::from("Swedbank")
+        (Some(p), _) => String::from(p.replace("'", "").trim_start_matches("IZ *")),
+        _ => String::from("Swedbank"),
     }
 }
 
@@ -83,13 +94,11 @@ fn row_import_id(row: &csv::StringRecord) -> String {
     // import id = md5 hash of the following:
     // raw date(2) payee(3) description (4) amount (5) doc. number (11)
     let ids = [2, 3, 4, 5, 11];
-    let digest = md5::compute(
-        ids.iter().fold("".to_string(), |mut acc, id| {
-            acc.push_str(row.get(*id).unwrap_or(""));
-            acc.push_str("|");
-            acc
-        })
-    );
+    let digest = md5::compute(ids.iter().fold("".to_string(), |mut acc, id| {
+        acc.push_str(row.get(*id).unwrap_or(""));
+        acc.push_str("|");
+        acc
+    }));
     format!("{:x}", digest)
 }
 
@@ -103,16 +112,16 @@ fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
             date,
             payee: fmt_payee(payee, memo),
             memo: fmt_memo(payee, memo),
-            amount
+            amount,
         }),
-        _ => None
+        _ => None,
     }
 }
 
 fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
     match row.get(1) {
         Some("20") => from_transaction_row(&row),
-        _ => None
+        _ => None,
     }
 }
 
@@ -120,7 +129,7 @@ fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
 
 #[derive(Serialize)]
 struct HttpRequest {
-    transactions: Vec<HttpTransaction>
+    transactions: Vec<HttpTransaction>,
 }
 
 #[derive(Serialize)]
@@ -132,7 +141,7 @@ struct HttpTransaction {
     // a "milliunit" is used in transactions: https://api.youneedabudget.com/#formats
     cleared: String,
     amount: i64,
-    account_id: String
+    account_id: String,
 }
 
 fn from_transaction(tx: Transaction, account_id: &str) -> HttpTransaction {
@@ -143,7 +152,7 @@ fn from_transaction(tx: Transaction, account_id: &str) -> HttpTransaction {
         memo: tx.memo,
         cleared: String::from("cleared"),
         amount: (tx.amount * Decimal::new(1000, 0)).to_i64().unwrap_or(0),
-        account_id: account_id.to_string()
+        account_id: account_id.to_string(),
     }
 }
 
@@ -155,11 +164,12 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
     );
 
     let body = HttpRequest {
-        transactions: txns.iter().cloned().map(|t| from_transaction(t, account_id)).collect()
+        transactions: txns.iter().cloned().map(|t| from_transaction(t, account_id)).collect(),
     };
 
     let client = reqwest::blocking::Client::new();
-    let res = client.post(&uri)
+    let res = client
+        .post(&uri)
         .bearer_auth(args.value_of("token").unwrap_or(""))
         .json(&body)
         .send()?;
@@ -171,10 +181,12 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
 
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let file = File::open(args.value_of("CSV_PATH").unwrap())?;
-    let mut rdr = csv::ReaderBuilder::new()
-        .delimiter(b';')
-        .from_reader(file);
-    let txns = rdr.records().map(|r| r.ok().and_then(|r| parse_row(&r))).flatten().collect();
+    let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(file);
+    let txns = rdr
+        .records()
+        .map(|r| r.ok().and_then(|r| parse_row(&r)))
+        .flatten()
+        .collect();
     request(txns, args)?;
     Ok(())
 }
@@ -182,27 +194,35 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
 fn main() {
     let args = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
-        .arg(Arg::with_name("CSV_PATH")
-            .help("Path for Swedbank CSV export")
-            .required(true))
-        .arg(Arg::with_name("token")
-            .short("t")
-            .required(true)
-            .env("YNAB_TOKEN")
-            .value_name("TOKEN")
-            .help("YNAB personal acces token"))
-        .arg(Arg::with_name("budget")
-            .short("b")
-            .required(true)
-            .env("YNAB_BUDGET")
-            .value_name("BUDGET")
-            .help("YNAB budget id"))
-        .arg(Arg::with_name("account")
-            .short("a")
-            .required(true)
-            .env("YNAB_ACCOUNT")
-            .value_name("ACCOUNT")
-            .help("YNAB account id"))
+        .arg(
+            Arg::with_name("CSV_PATH")
+                .help("Path for Swedbank CSV export")
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("token")
+                .short("t")
+                .required(true)
+                .env("YNAB_TOKEN")
+                .value_name("TOKEN")
+                .help("YNAB personal acces token"),
+        )
+        .arg(
+            Arg::with_name("budget")
+                .short("b")
+                .required(true)
+                .env("YNAB_BUDGET")
+                .value_name("BUDGET")
+                .help("YNAB budget id"),
+        )
+        .arg(
+            Arg::with_name("account")
+                .short("a")
+                .required(true)
+                .env("YNAB_ACCOUNT")
+                .value_name("ACCOUNT")
+                .help("YNAB account id"),
+        )
         .get_matches();
 
     if let Err(err) = run(args) {
@@ -239,9 +259,8 @@ mod tests {
     #[test]
     fn test_memo_tx_date() {
         assert_eq!(
-            extract_transaction_date(
-                Some("PIRKUMS 1234 07.07.2019 1.00 EUR (975255) RIMI")),
-                Some("07.07.2019")
+            extract_transaction_date(Some("PIRKUMS 1234 07.07.2019 1.00 EUR (975255) RIMI")),
+            Some("07.07.2019")
         );
     }
 
@@ -263,7 +282,10 @@ mod tests {
 
     #[test]
     fn test_tx_date() {
-        assert_eq!(fmt_date(Some("09.02.2020"), Some("Cash Money")), Some(String::from("2020-02-09")));
+        assert_eq!(
+            fmt_date(Some("09.02.2020"), Some("Cash Money")),
+            Some(String::from("2020-02-09"))
+        );
         assert_eq!(fmt_date(Some("09.02.2020"), None), Some(String::from("2020-02-09")));
     }
 
