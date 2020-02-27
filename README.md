@@ -1,6 +1,6 @@
-# YNAB API client Swedbank
+# YNAB API client for Swedbank
 
-`ynab-api` knows import Swedbank CSVs into YNAB via their API. YNAB API ids can be
+`ynab-api` imports Swedbank CSVs into YNAB via their API. YNAB API ids can be
 either provided via env vars or through command line options.
 
 Originally this project had YNAB friendly CSV generation from Swedbank CSV statements.
@@ -13,7 +13,7 @@ This code is available in [csv-export](https://github.com/skazhy/ynab-swedbank/t
 * Generate a [personal YNAB access token](https://app.youneedabudget.com/settings/developer)
 * Get your account and budget ids from an account url: `https://app.youneedabudget.com/BUDGET_ID/accounts/ACCOUNT_ID`
 
-### Usage
+## Usage
 
 ```
 USAGE:
