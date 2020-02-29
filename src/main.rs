@@ -126,9 +126,21 @@ fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
     }
 }
 
+fn print_balance(row: &csv::StringRecord) -> () {
+    println!(
+        "Final balance: {} {}",
+        row.get(5).unwrap_or(""),
+        row.get(6).unwrap_or("")
+    )
+}
+
 fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
     match row.get(1) {
         Some("20") => from_transaction_row(&row),
+        Some("86") => {
+            print_balance(&row);
+            None
+        }
         _ => None,
     }
 }
