@@ -126,7 +126,7 @@ fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
     }
 }
 
-fn print_balance(row: &csv::StringRecord) -> () {
+fn print_balance(row: &csv::StringRecord) {
     println!(
         "Final balance: {} {}",
         row.get(5).unwrap_or(""),
@@ -197,17 +197,37 @@ fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn
     Ok(())
 }
 
+fn is_swedbank_csv(headers: &csv::StringRecord) -> bool {
+    if headers.len() == 13 {
+        // TODO: once iter_order_by is stable, it can be used here.
+        headers
+            .iter()
+            .take(3)
+            .zip(["Klienta konts", "Ieraksta tips", "Datums"].iter())
+            .all(|(header, &expected)| header == expected)
+    } else {
+        false
+    }
+}
+
 //
 
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let file = File::open(args.value_of("CSV_PATH").unwrap())?;
     let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(file);
-    let txns = rdr
-        .records()
-        .map(|r| r.ok().and_then(|r| parse_row(&r)))
-        .flatten()
-        .collect();
-    request(txns, args)?;
+
+    let valid_csv = rdr.headers().map(|h| is_swedbank_csv(h)).unwrap_or(false);
+    if valid_csv {
+        let txns = rdr
+            .records()
+            .map(|r| r.ok().and_then(|r| parse_row(&r)))
+            .flatten()
+            .collect();
+        request(txns, args)?;
+    } else {
+        println!("ERROR: Invalid CSV");
+    }
+
     Ok(())
 }
 
@@ -335,5 +355,62 @@ mod tests {
     #[test]
     fn test_credit_amount() {
         assert_eq!(fmt_amount(Some("0,49"), Some("K")), Some(Decimal::new(49, 2)));
+    }
+
+    #[test]
+    fn test_detect_swed() {
+        let headers = csv::StringRecord::from(vec![
+            "Klienta konts",
+            "Ieraksta tips",
+            "Datums",
+            "Saņēmējs/Maksātājs",
+            "Informācija saņēmējam",
+            "Summa",
+            "Valūta",
+            "Debets/Kredīts",
+            "Arhīva kods",
+            "Maksājuma veids",
+            "Refernces numurs",
+            "Dokumenta numurs",
+            // XXX: Swedbank includes trailing semicolons,
+            //      which are treated like empty columns
+            "",
+        ]);
+        assert_eq!(is_swedbank_csv(&headers), true);
+    }
+
+    #[test]
+    fn test_detect_swed_invalid_fields() {
+        let headers = csv::StringRecord::from(vec![
+            "Klienta ponts",
+            "Ieraksta tips",
+            "Datums",
+            "Saņēmējs/Maksātājs",
+            "Informācija saņēmējam",
+            "Summa",
+            "Valūta",
+            "Debets/Kredīts",
+            "Arhīva kods",
+            "Maksājuma veids",
+            "Refernces numurs",
+            "Dokumenta numurs",
+            "",
+        ]);
+        assert_eq!(is_swedbank_csv(&headers), false);
+    }
+
+    #[test]
+    fn test_detect_swed_missing_fields() {
+        let headers = csv::StringRecord::from(vec![
+            "Klienta ponts",
+            "Ieraksta tips",
+            "Debets/Kredīts",
+            "Arhīva kods",
+            "Maksājuma veids",
+            "Refernces numurs",
+            "Dokumenta numurs",
+            "",
+        ]);
+        assert_eq!(is_swedbank_csv(&headers), false);
     }
 }
