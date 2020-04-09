@@ -1,11 +1,6 @@
 use std::error::Error;
 use std::fs::File;
 use std::process;
-use std::str::FromStr;
-
-extern crate rust_decimal;
-use rust_decimal::prelude::ToPrimitive;
-use rust_decimal::Decimal;
 
 extern crate serde;
 use serde::Serialize;
@@ -13,23 +8,15 @@ use serde::Serialize;
 extern crate clap;
 use clap::{App, Arg};
 
-#[derive(Clone)]
-struct Transaction {
+#[derive(Serialize)]
+struct YnabTransaction {
     import_id: String,
     date: String,
-    payee: String,
+    payee_name: String,
     memo: Option<String>,
-    amount: Decimal,
-}
-
-fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> Option<Decimal> {
-    amount
-        .map(|a| Decimal::from_str(&a.replace(",", ".")))
-        .and_then(|res| res.ok())
-        .map(|v| match tx_type {
-            Some("D") => -v,
-            _ => v,
-        })
+    cleared: String,
+    amount: i64,
+    account_id: String,
 }
 
 fn prefixed_memo(v: &str) -> bool {
@@ -110,17 +97,30 @@ fn row_import_id(row: &csv::StringRecord) -> String {
     format!("{:x}", digest)
 }
 
-fn from_transaction_row(row: &csv::StringRecord) -> Option<Transaction> {
+// YNAB is using a "milliunit" for tx amounts: https://api.youneedabudget.com/#formats
+fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> i64 {
+    amount
+        .and_then(|a| i64::from_str_radix(&a.replace(",", ""), 10).ok())
+        .map(|v| match tx_type {
+            Some("D") => -v,
+            _ => v,
+        })
+        .unwrap_or(0)
+}
+
+fn from_transaction_row(row: &csv::StringRecord, account_id: &str) -> Option<YnabTransaction> {
     let payee = non_empty_field(row, 3);
     let memo = non_empty_field(row, 4);
 
-    match (fmt_amount(row.get(5), row.get(7)), fmt_date(row.get(2), memo)) {
-        (Some(amount), Some(date)) => Some(Transaction {
+    match fmt_date(row.get(2), memo) {
+        Some(date) => Some(YnabTransaction {
             import_id: row_import_id(&row),
             date,
-            payee: fmt_payee(payee, memo),
+            payee_name: fmt_payee(payee, memo),
             memo: fmt_memo(payee, memo),
-            amount,
+            cleared: String::from("cleared"),
+            amount: fmt_amount(row.get(5), row.get(7)),
+            account_id: String::from(account_id),
         }),
         _ => None,
     }
@@ -134,9 +134,9 @@ fn print_balance(row: &csv::StringRecord) {
     )
 }
 
-fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
+fn parse_row(row: &csv::StringRecord, account_id: &str) -> Option<YnabTransaction> {
     match row.get(1) {
-        Some("20") => from_transaction_row(&row),
+        Some("20") => from_transaction_row(&row, account_id),
         Some("86") => {
             print_balance(&row);
             None
@@ -149,43 +149,16 @@ fn parse_row(row: &csv::StringRecord) -> Option<Transaction> {
 
 #[derive(Serialize)]
 struct HttpRequest {
-    transactions: Vec<HttpTransaction>,
+    transactions: Vec<YnabTransaction>,
 }
 
-#[derive(Serialize)]
-struct HttpTransaction {
-    import_id: String,
-    date: String,
-    payee_name: String,
-    memo: Option<String>,
-    // a "milliunit" is used in transactions: https://api.youneedabudget.com/#formats
-    cleared: String,
-    amount: i64,
-    account_id: String,
-}
-
-fn from_transaction(tx: Transaction, account_id: &str) -> HttpTransaction {
-    HttpTransaction {
-        import_id: tx.import_id,
-        date: tx.date,
-        payee_name: tx.payee,
-        memo: tx.memo,
-        cleared: String::from("cleared"),
-        amount: (tx.amount * Decimal::new(1000, 0)).to_i64().unwrap_or(0),
-        account_id: account_id.to_string(),
-    }
-}
-
-fn request(txns: Vec<Transaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let account_id = args.value_of("account").unwrap_or("");
+fn request(txns: Vec<YnabTransaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let uri = format!(
         "https://api.youneedabudget.com/v1/budgets/{}/transactions",
         args.value_of("budget").unwrap_or("")
     );
 
-    let body = HttpRequest {
-        transactions: txns.iter().cloned().map(|t| from_transaction(t, account_id)).collect(),
-    };
+    let body = HttpRequest { transactions: txns };
 
     let client = reqwest::blocking::Client::new();
     let res = client
@@ -218,9 +191,10 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
 
     let valid_csv = rdr.headers().map(|h| is_swedbank_csv(h)).unwrap_or(false);
     if valid_csv {
+        let account_id = args.value_of("account").unwrap_or("");
         let txns = rdr
             .records()
-            .map(|r| r.ok().and_then(|r| parse_row(&r)))
+            .map(|r| r.ok().and_then(|r| parse_row(&r, account_id)))
             .flatten()
             .collect();
         request(txns, args)?;
@@ -349,12 +323,12 @@ mod tests {
 
     #[test]
     fn test_debit_amount() {
-        assert_eq!(fmt_amount(Some("12,99"), Some("D")), Some(Decimal::new(-1299, 2)));
+        assert_eq!(fmt_amount(Some("12,99"), Some("D")), -1299);
     }
 
     #[test]
     fn test_credit_amount() {
-        assert_eq!(fmt_amount(Some("0,49"), Some("K")), Some(Decimal::new(49, 2)));
+        assert_eq!(fmt_amount(Some("0,49"), Some("K")), 49);
     }
 
     #[test]
