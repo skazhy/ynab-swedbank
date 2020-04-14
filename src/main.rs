@@ -102,8 +102,8 @@ fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> i64 {
     amount
         .and_then(|a| i64::from_str_radix(&a.replace(",", ""), 10).ok())
         .map(|v| match tx_type {
-            Some("D") => -v,
-            _ => v,
+            Some("D") => -10 * v,
+            _ => 10 * v,
         })
         .unwrap_or(0)
 }
@@ -323,12 +323,12 @@ mod tests {
 
     #[test]
     fn test_debit_amount() {
-        assert_eq!(fmt_amount(Some("12,99"), Some("D")), -1299);
+        assert_eq!(fmt_amount(Some("12,99"), Some("D")), -12990);
     }
 
     #[test]
     fn test_credit_amount() {
-        assert_eq!(fmt_amount(Some("0,49"), Some("K")), 49);
+        assert_eq!(fmt_amount(Some("0,49"), Some("K")), 490);
     }
 
     #[test]
