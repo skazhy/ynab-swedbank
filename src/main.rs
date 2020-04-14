@@ -17,6 +17,18 @@ struct YnabTransaction {
     cleared: String,
     amount: i64,
     account_id: String,
+
+    #[serde(skip_serializing)]
+    is_commission: bool,
+}
+
+impl YnabTransaction {
+    fn add_amount(self: Self, commission: i64) -> Self {
+        YnabTransaction {
+            amount: self.amount + commission,
+            ..self
+        }
+    }
 }
 
 fn prefixed_memo(v: &str) -> bool {
@@ -108,6 +120,15 @@ fn fmt_amount(amount: Option<&str>, tx_type: Option<&str>) -> i64 {
         .unwrap_or(0)
 }
 
+// Returns true if the given transaction contains extra processing fees that need
+// to be applied to the previous transaction.
+fn is_commission(memo: Option<&str>, op_type: Option<&str>) -> bool {
+    match (memo, op_type) {
+        (Some(m), Some("KOM")) => m.ends_with(" apkalpošanas komisija"),
+        _ => false,
+    }
+}
+
 fn from_transaction_row(row: &csv::StringRecord, account_id: &str) -> Option<YnabTransaction> {
     let payee = non_empty_field(row, 3);
     let memo = non_empty_field(row, 4);
@@ -121,6 +142,7 @@ fn from_transaction_row(row: &csv::StringRecord, account_id: &str) -> Option<Yna
             cleared: String::from("cleared"),
             amount: fmt_amount(row.get(5), row.get(7)),
             account_id: String::from(account_id),
+            is_commission: is_commission(memo, row.get(9)),
         }),
         _ => None,
     }
@@ -192,12 +214,23 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let valid_csv = rdr.headers().map(|h| is_swedbank_csv(h)).unwrap_or(false);
     if valid_csv {
         let account_id = args.value_of("account").unwrap_or("");
-        let txns = rdr
+        let mut txns = rdr
             .records()
             .map(|r| r.ok().and_then(|r| parse_row(&r, account_id)))
             .flatten()
-            .collect();
-        request(txns, args)?;
+            .peekable();
+
+        // Fold transaction fees into actual purhcase transactions.
+        let mut v: Vec<YnabTransaction> = Vec::new();
+        loop {
+            match (txns.next(), txns.peek()) {
+                (Some(t), _) if t.is_commission => continue,
+                (Some(t), Some(c)) if c.is_commission => v.push(t.add_amount(c.amount)),
+                (Some(t), _) => v.push(t),
+                (None, _) => break,
+            }
+        }
+        request(v, args)?;
     } else {
         println!("ERROR: Invalid CSV");
     }
@@ -386,5 +419,37 @@ mod tests {
             "",
         ]);
         assert_eq!(is_swedbank_csv(&headers), false);
+    }
+
+    #[test]
+    fn test_local_tx_fee_memo() {
+        assert_eq!(
+            is_commission(Some("Maksājumu uzdevuma apkalpošanas komisija"), Some("KOM")),
+            true
+        );
+    }
+
+    #[test]
+    fn test_local_tx_no_fee_memo() {
+        assert_eq!(
+            is_commission(Some("Maksājumu uzdevuma apkalpošanas komisija"), Some("CTX")),
+            false
+        );
+    }
+
+    #[test]
+    fn test_international_tx_fee_memo() {
+        assert_eq!(
+            is_commission(Some("Ārvalstu Maksājumu uzdevumu apkalpošanas komisija"), Some("KOM")),
+            true
+        );
+    }
+
+    #[test]
+    fn test_other_kom_tx_memo() {
+        assert_eq!(
+            is_commission(Some("Kartes mēneša maksa 000000******0000 02.2020"), Some("KOM")),
+            false
+        );
     }
 }
