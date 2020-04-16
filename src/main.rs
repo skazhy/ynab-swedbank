@@ -32,6 +32,8 @@ struct SwedbankCsv {
     currency: String,
     #[serde(rename = "Debets/Kredīts")] // 7
     debit_or_credit: EntryType,
+    #[serde(rename = "Arhīva kods")] // 7
+    transaction_id: String,
     #[serde(rename = "Maksājuma veids")] // 9
     payment_type: String,
     #[serde(rename = "Dokumenta numurs")] // 11
@@ -127,12 +129,6 @@ fn fmt_date(date: &str, memo: &str) -> String {
     reorder_date(d)
 }
 
-fn row_import_id(c: &SwedbankCsv) -> String {
-    // import id = md5 hash of the following:
-    let h = format!("{}|{}|{}|{}|{}|", c.date, c.payee, c.memo, c.amount, c.document_number);
-    format!("{:x}", md5::compute(h))
-}
-
 // YNAB is using a "milliunit" for tx amounts: https://api.youneedabudget.com/#formats
 fn fmt_amount(amount: &str, tx_type: &EntryType) -> i64 {
     i64::from_str_radix(&amount.replace(",", ""), 10)
@@ -152,7 +148,7 @@ fn is_commission(memo: &str, payment_type: &str) -> bool {
 
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     YnabTransaction {
-        import_id: row_import_id(&row),
+        import_id: row.transaction_id,
         date: fmt_date(&row.date, &row.memo),
         payee_name: fmt_payee(&row.payee, &row.memo),
         memo: fmt_memo(&row.payee, &row.memo),

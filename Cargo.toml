@@ -7,6 +7,5 @@ edition = "2018"
 [dependencies]
 clap = "2"
 csv = "1"
-md5 = "0.6.1"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
 serde = { version = "1.0.100", features = ["derive"] }
