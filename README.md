@@ -1,10 +1,8 @@
 # YNAB API client for Swedbank
 
 `ynab-api` imports Swedbank CSVs into YNAB via their API. YNAB API ids can be
-either provided via env vars or through command line options.
-
-Originally this project had YNAB friendly CSV generation from Swedbank CSV statements.
-This code is available in [csv-export](https://github.com/skazhy/ynab-swedbank/tree/csv-export) branch.
+either provided via env vars or through command line options. Transaction fees
+are automatically appended to transactions.
 
 ## Setup
 
@@ -53,3 +51,5 @@ for FILE in `git diff --cached --name-only -- \*.rs`; do
   fi
 done
 ```
+
+Reference for the input CSV can be found here ([PDF](https://www.swedbank.lv/static/pdf/business/d2d/payments/import/CSVformat_lv.pdf)).
