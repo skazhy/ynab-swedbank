@@ -9,6 +9,14 @@ extern crate clap;
 use clap::{App, Arg};
 
 #[derive(Debug, Deserialize)]
+enum EntryType {
+    #[serde(rename = "K")]
+    Credit,
+    #[serde(rename = "D")]
+    Debit,
+}
+
+#[derive(Debug, Deserialize)]
 struct SwedbankCsv {
     #[serde(rename = "Ieraksta tips")] // 1
     record_type: String,
@@ -23,7 +31,7 @@ struct SwedbankCsv {
     #[serde(rename = "Valūta")] // 6
     currency: String,
     #[serde(rename = "Debets/Kredīts")] // 7
-    debit_or_credit: String,
+    debit_or_credit: EntryType,
     #[serde(rename = "Maksājuma veids")] // 9
     payment_type: String,
     #[serde(rename = "Dokumenta numurs")] // 11
@@ -126,12 +134,12 @@ fn row_import_id(c: &SwedbankCsv) -> String {
 }
 
 // YNAB is using a "milliunit" for tx amounts: https://api.youneedabudget.com/#formats
-fn fmt_amount(amount: &str, tx_type: &str) -> i64 {
+fn fmt_amount(amount: &str, tx_type: &EntryType) -> i64 {
     i64::from_str_radix(&amount.replace(",", ""), 10)
         .ok()
         .map(|v| match tx_type {
-            "D" => -10 * v,
-            _ => 10 * v,
+            EntryType::Debit => -10 * v,
+            EntryType::Credit => 10 * v,
         })
         .unwrap_or(0)
 }
@@ -333,12 +341,12 @@ mod tests {
 
     #[test]
     fn test_debit_amount() {
-        assert_eq!(fmt_amount("12,99", "D"), -12990);
+        assert_eq!(fmt_amount("12,99", &EntryType::Debit), -12990);
     }
 
     #[test]
     fn test_credit_amount() {
-        assert_eq!(fmt_amount("0,49", "K"), 490);
+        assert_eq!(fmt_amount("0,49", &EntryType::Credit), 490);
     }
 
     #[test]
