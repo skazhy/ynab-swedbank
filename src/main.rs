@@ -17,9 +17,23 @@ enum EntryType {
 }
 
 #[derive(Debug, Deserialize)]
+enum RecordType {
+    #[serde(rename = "10")]
+    StartBalance,
+    #[serde(rename = "20")]
+    Transaction,
+    #[serde(rename = "82")]
+    Turnover,
+    #[serde(rename = "86")]
+    EndBalance,
+    #[serde(rename = "900")]
+    Interest,
+}
+
+#[derive(Debug, Deserialize)]
 struct SwedbankCsv {
     #[serde(rename = "Ieraksta tips")] // 1
-    record_type: String,
+    record_type: RecordType,
     #[serde(rename = "Datums")] // 2
     date: String,
     #[serde(rename = "Saņēmējs/Maksātājs")] // 3
@@ -160,9 +174,9 @@ fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
 }
 
 fn parse_row(row: SwedbankCsv, account_id: &str) -> Option<YnabTransaction> {
-    match row.record_type.as_str() {
-        "20" => Some(from_transaction_row(row, account_id)),
-        "86" => {
+    match row.record_type {
+        RecordType::Transaction => Some(from_transaction_row(row, account_id)),
+        RecordType::EndBalance => {
             println!("Final balance: {} {}", row.amount, row.currency);
             None
         }
