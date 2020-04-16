@@ -3,56 +3,13 @@ use std::fs::File;
 use std::process;
 
 extern crate serde;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 extern crate clap;
 use clap::{App, Arg};
 
-#[derive(Debug, Deserialize)]
-enum EntryType {
-    #[serde(rename = "K")]
-    Credit,
-    #[serde(rename = "D")]
-    Debit,
-}
-
-#[derive(Debug, Deserialize)]
-enum RecordType {
-    #[serde(rename = "10")]
-    StartBalance,
-    #[serde(rename = "20")]
-    Transaction,
-    #[serde(rename = "82")]
-    Turnover,
-    #[serde(rename = "86")]
-    EndBalance,
-    #[serde(rename = "900")]
-    Interest,
-}
-
-#[derive(Debug, Deserialize)]
-struct SwedbankCsv {
-    #[serde(rename = "Ieraksta tips")] // 1
-    record_type: RecordType,
-    #[serde(rename = "Datums")] // 2
-    date: String,
-    #[serde(rename = "Saņēmējs/Maksātājs")] // 3
-    payee: String,
-    #[serde(rename = "Informācija saņēmējam")] // 4
-    memo: String,
-    #[serde(rename = "Summa")] // 5
-    amount: String,
-    #[serde(rename = "Valūta")] // 6
-    currency: String,
-    #[serde(rename = "Debets/Kredīts")] // 7
-    debit_or_credit: EntryType,
-    #[serde(rename = "Arhīva kods")] // 7
-    transaction_id: String,
-    #[serde(rename = "Maksājuma veids")] // 9
-    payment_type: String,
-    #[serde(rename = "Dokumenta numurs")] // 11
-    document_number: String,
-}
+mod swed;
+use swed::*;
 
 #[derive(Serialize)]
 struct YnabTransaction {
