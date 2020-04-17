@@ -35,14 +35,10 @@ pub struct SwedbankCsv {
     pub memo: String,
     #[serde(rename = "Summa")] // 5
     pub amount: String,
-    #[serde(rename = "Valūta")] // 6
-    pub currency: String,
     #[serde(rename = "Debets/Kredīts")] // 7
     pub debit_or_credit: EntryType,
     #[serde(rename = "Arhīva kods")] // 7
     pub transaction_id: String,
     #[serde(rename = "Maksājuma veids")] // 9
     pub payment_type: String,
-    #[serde(rename = "Dokumenta numurs")] // 11
-    pub document_number: String,
 }

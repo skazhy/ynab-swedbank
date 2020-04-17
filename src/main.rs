@@ -134,7 +134,7 @@ fn parse_row(row: SwedbankCsv, account_id: &str) -> Option<YnabTransaction> {
     match row.record_type {
         RecordType::Transaction => Some(from_transaction_row(row, account_id)),
         RecordType::EndBalance => {
-            println!("Final balance: {} {}", row.amount, row.currency);
+            println!("Final balance: {} EUR", row.amount);
             None
         }
         _ => None,
