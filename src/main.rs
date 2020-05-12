@@ -22,7 +22,7 @@ struct YnabTransaction {
     account_id: String,
 
     #[serde(skip_serializing)]
-    is_commission: bool,
+    needs_rollup: bool,
 }
 
 impl YnabTransaction {
@@ -113,20 +113,31 @@ fn fmt_amount(amount: &str, tx_type: &EntryType) -> i64 {
 
 // Returns true if the given transaction contains extra processing fees that need
 // to be applied to the previous transaction.
-fn is_commission(memo: &str, payment_type: &str) -> bool {
+fn needs_rollup(memo: &str, payment_type: &str) -> bool {
     payment_type == "KOM" && memo.ends_with(" apkalpošanas komisija")
+}
+
+// Commission entries are separate records in the CSV, but their transaction ids
+// are the same as the main transaction. Create a unique transaction id for
+// commissions that we'd want to get as separate entries in YNAB.
+fn fmt_transaction_id(transaction_id: &str, payment_type: &str) -> String {
+    if payment_type == "KOM" {
+        format!("{}_1", transaction_id)
+    } else {
+        String::from(transaction_id)
+    }
 }
 
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     YnabTransaction {
-        import_id: row.transaction_id,
+        import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type),
         date: fmt_date(&row.date, &row.memo),
         payee_name: fmt_payee(&row.payee, &row.memo),
         memo: fmt_memo(&row.payee, &row.memo),
         cleared: String::from("cleared"),
         amount: fmt_amount(&row.amount, &row.debit_or_credit),
         account_id: String::from(account_id),
-        is_commission: is_commission(&row.memo, &row.payment_type),
+        needs_rollup: needs_rollup(&row.memo, &row.payment_type),
     }
 }
 
@@ -182,8 +193,8 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let mut v: Vec<YnabTransaction> = Vec::new();
     loop {
         match (txns.next(), txns.peek()) {
-            (Some(t), _) if t.is_commission => continue,
-            (Some(t), Some(c)) if c.is_commission => v.push(t.add_amount(c.amount)),
+            (Some(t), _) if t.needs_rollup => continue,
+            (Some(t), Some(c)) if c.needs_rollup => v.push(t.add_amount(c.amount)),
             (Some(t), _) => v.push(t),
             (None, _) => break,
         }
@@ -317,19 +328,29 @@ mod tests {
     }
 
     #[test]
+    fn test_commission_txid() {
+        assert_eq!(fmt_transaction_id("123", "KOM"), String::from("123_1"));
+    }
+
+    #[test]
+    fn test_purchase_txid() {
+        assert_eq!(fmt_transaction_id("123", "CTX"), String::from("123"));
+    }
+
+    #[test]
     fn test_local_tx_fee_memo() {
-        assert_eq!(is_commission("Maksājumu uzdevuma apkalpošanas komisija", "KOM"), true);
+        assert_eq!(needs_rollup("Maksājumu uzdevuma apkalpošanas komisija", "KOM"), true);
     }
 
     #[test]
     fn test_local_tx_no_fee_memo() {
-        assert_eq!(is_commission("Maksājumu uzdevuma apkalpošanas komisija", "CTX"), false);
+        assert_eq!(needs_rollup("Maksājumu uzdevuma apkalpošanas komisija", "CTX"), false);
     }
 
     #[test]
     fn test_international_tx_fee_memo() {
         assert_eq!(
-            is_commission("Ārvalstu Maksājumu uzdevumu apkalpošanas komisija", "KOM"),
+            needs_rollup("Ārvalstu Maksājumu uzdevumu apkalpošanas komisija", "KOM"),
             true
         );
     }
@@ -337,7 +358,7 @@ mod tests {
     #[test]
     fn test_other_kom_tx_memo() {
         assert_eq!(
-            is_commission("Kartes mēneša maksa 000000******0000 02.2020", "KOM"),
+            needs_rollup("Kartes mēneša maksa 000000******0000 02.2020", "KOM"),
             false
         );
     }
