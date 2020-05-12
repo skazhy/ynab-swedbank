@@ -1,6 +1,6 @@
 # YNAB API client for Swedbank
 
-`ynab-api` imports Swedbank CSVs into YNAB via their API. YNAB API ids can be
+`ynab-swed` imports Swedbank CSVs into YNAB via their API. YNAB API ids can be
 either provided via env vars or through command line options. Transaction fees
 are automatically appended to transactions.
 
