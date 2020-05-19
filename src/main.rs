@@ -2,37 +2,14 @@ use std::error::Error;
 use std::fs::File;
 use std::process;
 
-extern crate serde;
-use serde::Serialize;
-
 extern crate clap;
 use clap::{App, Arg};
 
 mod swed;
 use swed::*;
 
-#[derive(Serialize)]
-struct YnabTransaction {
-    import_id: String,
-    date: String,
-    payee_name: String,
-    memo: Option<String>,
-    cleared: String,
-    amount: i64,
-    account_id: String,
-
-    #[serde(skip_serializing)]
-    needs_rollup: bool,
-}
-
-impl YnabTransaction {
-    fn add_amount(self: Self, commission: i64) -> Self {
-        YnabTransaction {
-            amount: self.amount + commission,
-            ..self
-        }
-    }
-}
+mod ynab;
+use ynab::*;
 
 fn prefixed_memo(v: &str) -> bool {
     v.starts_with("PIRKUMS ")
@@ -102,8 +79,7 @@ fn fmt_date(date: &str, memo: &str) -> String {
 
 // YNAB is using a "milliunit" for tx amounts: https://api.youneedabudget.com/#formats
 fn fmt_amount(amount: &str, tx_type: &EntryType) -> i64 {
-    i64::from_str_radix(&amount.replace(",", ""), 10)
-        .ok()
+    parse_i64_string(amount)
         .map(|v| match tx_type {
             EntryType::Debit => -10 * v,
             EntryType::Credit => 10 * v,
@@ -141,42 +117,6 @@ fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     }
 }
 
-fn parse_row(row: SwedbankCsv, account_id: &str) -> Option<YnabTransaction> {
-    match row.record_type {
-        RecordType::Transaction => Some(from_transaction_row(row, account_id)),
-        RecordType::EndBalance => {
-            println!("Final balance: {} EUR", row.amount);
-            None
-        }
-        _ => None,
-    }
-}
-
-// HTTP output
-
-#[derive(Serialize)]
-struct HttpRequest {
-    transactions: Vec<YnabTransaction>,
-}
-
-fn request(txns: Vec<YnabTransaction>, args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let uri = format!(
-        "https://api.youneedabudget.com/v1/budgets/{}/transactions",
-        args.value_of("budget").unwrap_or("")
-    );
-
-    let body = HttpRequest { transactions: txns };
-
-    let client = reqwest::blocking::Client::new();
-    let res = client
-        .post(&uri)
-        .bearer_auth(args.value_of("token").unwrap_or(""))
-        .json(&body)
-        .send()?;
-    println!("{}", res.text()?);
-    Ok(())
-}
-
 //
 
 fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
@@ -184,22 +124,50 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(file);
 
     let account_id = args.value_of("account").unwrap_or("");
-    let mut txns = rdr
-        .deserialize()
-        .map(|r| r.ok().and_then(|r| parse_row(r, account_id)))
-        .flatten()
-        .peekable();
+    let mut txns: Vec<YnabTransaction> = Vec::new();
+    let mut csv_balance: i64 = 0;
 
-    let mut v: Vec<YnabTransaction> = Vec::new();
-    loop {
-        match (txns.next(), txns.peek()) {
-            (Some(t), _) if t.needs_rollup => continue,
-            (Some(t), Some(c)) if c.needs_rollup => v.push(t.add_amount(c.amount)),
-            (Some(t), _) => v.push(t),
-            (None, _) => break,
+    for row in rdr.deserialize() {
+        let record: SwedbankCsv = row?;
+        match record.record_type {
+            RecordType::Transaction => txns.push(from_transaction_row(record, account_id)),
+            RecordType::EndBalance => {
+                if let Some(b) = parse_i64_string(&record.amount) {
+                    csv_balance = b
+                }
+            }
+            _ => {}
         }
     }
-    request(v, args)?;
+
+    let mut i = 0;
+    while i != txns.len() {
+        if txns[i].needs_rollup {
+            let to_apply = txns[i].amount;
+            let txn = txns.remove(i - 1);
+            txns.insert(i - 1, txn.add_amount(to_apply));
+            txns.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+
+    let client = YnabClient {
+        budget_id: args.value_of("budget").unwrap_or("").to_string(),
+        account_id: args.value_of("account").unwrap_or("").to_string(),
+        token: args.value_of("token").unwrap_or("").to_string(),
+    };
+
+    let res = client.post_transactions(txns)?;
+    println!("{} new transactions imported", res.transactions.len());
+    println!("{} duplicates found", res.duplicate_import_ids.len());
+    let ynab_balance = client.get_acccount()? / 10;
+    if ynab_balance != csv_balance {
+        println!("== Warning: balance mismatch:");
+        println!("Final CSV balance: {}", csv_balance as f32 / 100.0);
+        println!("Current YNAB balance: {}", ynab_balance as f32 / 100.0);
+        println!("Difference: {}", (ynab_balance - csv_balance) as f32 / 100.0);
+    }
 
     Ok(())
 }
