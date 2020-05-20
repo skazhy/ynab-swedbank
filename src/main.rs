@@ -117,20 +117,15 @@ fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     }
 }
 
-//
-
-fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let file = File::open(args.value_of("CSV_PATH").unwrap())?;
-    let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(file);
-
-    let account_id = args.value_of("account").unwrap_or("");
+fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
     let mut txns: Vec<YnabTransaction> = Vec::new();
     let mut csv_balance: i64 = 0;
 
+    let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(csv_file);
     for row in rdr.deserialize() {
         let record: SwedbankCsv = row?;
         match record.record_type {
-            RecordType::Transaction => txns.push(from_transaction_row(record, account_id)),
+            RecordType::Transaction => txns.push(from_transaction_row(record, &client.account_id)),
             RecordType::EndBalance => {
                 if let Some(b) = parse_i64_string(&record.amount) {
                     csv_balance = b
@@ -152,12 +147,6 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let client = YnabClient {
-        budget_id: args.value_of("budget").unwrap_or("").to_string(),
-        account_id: args.value_of("account").unwrap_or("").to_string(),
-        token: args.value_of("token").unwrap_or("").to_string(),
-    };
-
     let res = client.post_transactions(txns)?;
     println!("{} new transactions imported", res.transactions.len());
     println!("{} duplicates found", res.duplicate_import_ids.len());
@@ -172,7 +161,7 @@ fn run(args: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let args = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
@@ -206,10 +195,17 @@ fn main() {
         )
         .get_matches();
 
-    if let Err(err) = run(args) {
+    let client = YnabClient {
+        budget_id: args.value_of("budget").unwrap_or("").to_string(),
+        account_id: args.value_of("account").unwrap_or("").to_string(),
+        token: args.value_of("token").unwrap_or("").to_string(),
+    };
+
+    if let Err(err) = run(File::open(args.value_of("CSV_PATH").unwrap())?, client) {
         println!("{}", err);
         process::exit(1);
     }
+    Ok(())
 }
 
 #[cfg(test)]
