@@ -7,6 +7,10 @@ pub fn parse_i64_string(i: &str) -> Option<i64> {
     i64::from_str_radix(&i.replace(",", ""), 10).ok()
 }
 
+fn no_rollup() -> bool {
+    false
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct YnabTransaction {
     pub import_id: String,
@@ -17,7 +21,7 @@ pub struct YnabTransaction {
     pub amount: i64,
     pub account_id: String,
 
-    #[serde(skip_serializing)]
+    #[serde(skip, default = "no_rollup")]
     pub needs_rollup: bool,
 }
 
