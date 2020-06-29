@@ -128,7 +128,7 @@ fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
             RecordType::Transaction => txns.push(from_transaction_row(record, &client.account_id)),
             RecordType::EndBalance => {
                 if let Some(b) = parse_i64_string(&record.amount) {
-                    csv_balance = b
+                    csv_balance += b
                 }
             }
             _ => {}
