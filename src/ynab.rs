@@ -106,7 +106,7 @@ impl YnabClient {
         Ok(res.data)
     }
 
-    pub fn get_acccount(self: &Self) -> Result<i64, Box<dyn Error>> {
+    pub fn get_acccount_balance(self: &Self) -> Result<i64, Box<dyn Error>> {
         let res: GetAccountResponse = self.get(self.account_uri())?.json()?;
         Ok(res.data.account.balance)
     }
