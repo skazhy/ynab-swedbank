@@ -121,17 +121,21 @@ fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
     let mut txns: Vec<YnabTransaction> = Vec::new();
     let mut csv_balance: i64 = 0;
 
+    let budget_currency = client.get_budget_currency()?;
+
     let mut rdr = csv::ReaderBuilder::new().delimiter(b';').from_reader(csv_file);
     for row in rdr.deserialize() {
         let record: SwedbankCsv = row?;
-        match record.record_type {
-            RecordType::Transaction => txns.push(from_transaction_row(record, &client.account_id)),
-            RecordType::EndBalance => {
-                if let Some(b) = parse_i64_string(&record.amount) {
-                    csv_balance += b
+        if record.currency == budget_currency {
+            match record.record_type {
+                RecordType::Transaction => txns.push(from_transaction_row(record, &client.account_id)),
+                RecordType::EndBalance => {
+                    if let Some(b) = parse_i64_string(&record.amount) {
+                        csv_balance = b
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 

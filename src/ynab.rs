@@ -41,6 +41,16 @@ pub struct YnabClient {
 }
 
 #[derive(Deserialize)]
+struct YnabCurrencyFormat {
+    iso_code: String,
+}
+
+#[derive(Deserialize)]
+struct YnabBudget {
+    pub currency_format: YnabCurrencyFormat,
+}
+
+#[derive(Deserialize)]
 struct YnabAccount {
     balance: i64,
 }
@@ -53,6 +63,16 @@ struct GetAccountResponseData {
 #[derive(Deserialize)]
 struct GetAccountResponse {
     data: GetAccountResponseData,
+}
+
+#[derive(Deserialize)]
+struct GetBudgetResponseData {
+    budget: YnabBudget,
+}
+
+#[derive(Deserialize)]
+struct GetBudgetResponse {
+    data: GetBudgetResponseData,
 }
 
 #[derive(Deserialize)]
@@ -87,6 +107,10 @@ impl YnabClient {
         )
     }
 
+    fn budget_uri(self: &Self) -> String {
+        format!("https://api.youneedabudget.com/v1/budgets/{}", self.budget_id)
+    }
+
     fn get(self: &Self, uri: String) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
         client.get(&uri).bearer_auth(&self.token).send()
@@ -104,6 +128,11 @@ impl YnabClient {
         let body = PostTransactionsRequest { transactions: txns };
         let res: PostTransactionsResponse = self.post(body, self.transactions_uri())?.json()?;
         Ok(res.data)
+    }
+
+    pub fn get_budget_currency(self: &Self) -> Result<String, Box<dyn Error>> {
+        let res: GetBudgetResponse = self.get(self.budget_uri())?.json()?;
+        Ok(res.data.budget.currency_format.iso_code)
     }
 
     pub fn get_acccount_balance(self: &Self) -> Result<i64, Box<dyn Error>> {
