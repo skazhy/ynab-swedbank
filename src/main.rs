@@ -151,9 +151,18 @@ fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let res = client.post_transactions(txns)?;
-    println!("{} new transactions imported", res.transactions.len());
-    println!("{} duplicates found", res.duplicate_import_ids.len());
+    let mut imported: usize = 0;
+    let mut duplicates: usize = 0;
+
+    for t in txns.rchunks(50) {
+        let res = client.post_transactions(t)?;
+        imported += res.transactions.len();
+        duplicates += res.duplicate_import_ids.len();
+    }
+
+    println!("{} new transactions imported", imported);
+    println!("{} duplicates found", duplicates);
+
     let ynab_balance = client.get_acccount_balance()? / 10;
     if ynab_balance != csv_balance {
         println!("== Warning: balance mismatch:");
