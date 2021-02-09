@@ -53,6 +53,7 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
     match payee {
         "" => String::from("Swedbank"),
         "SumUp" => drop_words(memo, "*", 1),
+        p if p.starts_with("AMZN Digital*") => String::from(p).replace("'", ""),
         p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
         p => String::from(p).replace("'", ""),
     }
@@ -245,6 +246,11 @@ mod tests {
     #[test]
     fn test_gumroad_payee() {
         assert_eq!(fmt_payee("GUM.CO/CC* Gumroad1", "memo!"), "Gumroad1");
+    }
+
+    #[test]
+    fn test_amazon_payee() {
+        assert_eq!(fmt_payee("AMZN Digital*Foo 111", "memo!"), "AMZN Digital*Foo 111");
     }
 
     #[test]
