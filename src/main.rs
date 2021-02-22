@@ -11,8 +11,30 @@ use swed::*;
 mod ynab;
 use ynab::*;
 
-fn prefixed_memo(v: &str) -> bool {
-    v.starts_with("PIRKUMS ")
+struct ParsedMemo {
+    date: Option<String>,
+    memo: String,
+}
+
+impl ParsedMemo {
+    pub fn from_memo_str(m: &str) -> ParsedMemo {
+        if m.starts_with("PIRKUMS ") {
+            let m2 = if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
+                drop_words(m, " ", 13)
+            } else {
+                drop_words(m, " ", 6)
+            };
+            ParsedMemo {
+                date: m.split(' ').nth(2).map(String::from),
+                memo: m2.replace("'", ""),
+            }
+        } else {
+            ParsedMemo {
+                date: None,
+                memo: String::from(m).replace("'", ""),
+            }
+        }
+    }
 }
 
 /// Splits the string with given splitter, drops n first items
@@ -25,29 +47,6 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
         .join(splitter)
 }
 
-fn remove_memo_prefix(m: &str) -> String {
-    if prefixed_memo(m) {
-        if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
-            drop_words(m, " ", 13)
-        } else {
-            drop_words(m, " ", 6)
-        }
-    } else {
-        String::from(m)
-    }
-    .replace("'", "")
-}
-
-/// Formats the memo, removes duplicate payee information
-fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
-    let m2 = remove_memo_prefix(memo);
-    if !payee.is_empty() && m2.starts_with(payee) {
-        None
-    } else {
-        Some(m2)
-    }
-}
-
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
 fn fmt_payee(payee: &str, memo: &str) -> String {
     match payee {
@@ -57,26 +56,6 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
         p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
         p => String::from(p).replace("'", ""),
     }
-}
-
-/// Extracts the actual transaction date (MM.DD.YYYY) from the memo string.
-fn extract_transaction_date(memo: &str) -> Option<&str> {
-    if prefixed_memo(memo) {
-        memo.split(' ').nth(2)
-    } else {
-        None
-    }
-}
-
-fn reorder_date(d: &str) -> String {
-    let mut parts = d.split('.').collect::<Vec<&str>>();
-    parts.reverse();
-    parts.join("-")
-}
-
-fn fmt_date(date: &str, memo: &str) -> String {
-    let d = extract_transaction_date(memo).unwrap_or(date);
-    reorder_date(d)
 }
 
 // YNAB is using a "milliunit" for tx amounts: https://api.youneedabudget.com/#formats
@@ -106,12 +85,24 @@ fn fmt_transaction_id(transaction_id: &str, payment_type: &str) -> String {
     }
 }
 
+/// Transforms date from DD.MM.YYYY to YYYY-MM-DD
+fn fmt_date(d: &str) -> String {
+    let mut parts = d.split('.').collect::<Vec<&str>>();
+    parts.reverse();
+    parts.join("-")
+}
+
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
+    let memo = ParsedMemo::from_memo_str(&row.memo);
     YnabTransaction {
         import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type),
-        date: fmt_date(&row.date, &row.memo),
+        date: fmt_date(&memo.date.unwrap_or(row.date)),
         payee_name: fmt_payee(&row.payee, &row.memo),
-        memo: fmt_memo(&row.payee, &row.memo),
+        memo: if !row.payee.is_empty() && memo.memo.starts_with(&row.payee) {
+            None
+        } else {
+            Some(memo.memo)
+        },
         cleared: String::from("cleared"),
         amount: fmt_amount(&row.amount, &row.debit_or_credit),
         account_id: String::from(account_id),
@@ -259,51 +250,8 @@ mod tests {
     }
 
     #[test]
-    fn test_local_memo_prefix_removal() {
-        assert_eq!(
-            remove_memo_prefix("PIRKUMS 1 24.02.2020 1.00 EUR (1) CAFE"),
-            String::from("CAFE")
-        );
-    }
-
-    #[test]
-    fn test_foreign_memo_prefix_removal() {
-        assert_eq!(
-            remove_memo_prefix(
-                "PIRKUMS 1 17.11.2019 2.50 GBP VALŪTAS KURSS 0.856164, KONVERTĀCIJAS MAKSA 0.06 EUR (1) Rapha"
-            ),
-            String::from("Rapha")
-        )
-    }
-
-    #[test]
-    fn test_memo_tx_date() {
-        assert_eq!(
-            extract_transaction_date("PIRKUMS 1234 07.07.2019 1.00 EUR (975255) RIMI"),
-            Some("07.07.2019")
-        );
-    }
-
-    #[test]
-    fn test_no_payee_memo() {
-        assert_eq!(fmt_memo("", "Memo!"), Some(String::from("Memo!")));
-    }
-
-    #[test]
-    fn test_discard_memo() {
-        assert_eq!(fmt_memo("Payee", "Payee TX1"), None);
-    }
-
-    #[test]
-    fn test_memo_no_tx() {
-        assert_eq!(extract_transaction_date("Cash Money"), None);
-        assert_eq!(extract_transaction_date(""), None);
-    }
-
-    #[test]
     fn test_tx_date() {
-        assert_eq!(fmt_date("09.02.2020", "Cash Money"), String::from("2020-02-09"));
-        assert_eq!(fmt_date("09.02.2020", ""), String::from("2020-02-09"));
+        assert_eq!(fmt_date("09.02.2020"), String::from("2020-02-09"));
     }
 
     #[test]
