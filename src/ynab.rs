@@ -111,14 +111,14 @@ impl YnabClient {
         format!("https://api.youneedabudget.com/v1/budgets/{}", self.budget_id)
     }
 
-    fn get(self: &Self, uri: String) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn get(self: &Self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.get(&uri).bearer_auth(&self.token).send()
+        client.get(uri).bearer_auth(&self.token).send()
     }
 
-    fn post<T: Serialize>(self: &Self, body: T, uri: String) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn post<T: Serialize>(self: &Self, body: T, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.post(&uri).bearer_auth(&self.token).json(&body).send()
+        client.post(uri).bearer_auth(&self.token).json(&body).send()
     }
 
     pub fn post_transactions<T: Serialize>(
@@ -126,17 +126,17 @@ impl YnabClient {
         txns: T,
     ) -> Result<PostTransactionsResponseData, Box<dyn Error>> {
         let body = PostTransactionsRequest { transactions: txns };
-        let res: PostTransactionsResponse = self.post(body, self.transactions_uri())?.json()?;
+        let res: PostTransactionsResponse = self.post(body, &self.transactions_uri())?.json()?;
         Ok(res.data)
     }
 
     pub fn get_budget_currency(self: &Self) -> Result<String, Box<dyn Error>> {
-        let res: GetBudgetResponse = self.get(self.budget_uri())?.json()?;
+        let res: GetBudgetResponse = self.get(&self.budget_uri())?.json()?;
         Ok(res.data.budget.currency_format.iso_code)
     }
 
     pub fn get_acccount_balance(self: &Self) -> Result<i64, Box<dyn Error>> {
-        let res: GetAccountResponse = self.get(self.account_uri())?.json()?;
+        let res: GetAccountResponse = self.get(&self.account_uri())?.json()?;
         Ok(res.data.account.balance)
     }
 }
