@@ -52,6 +52,7 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
     match payee {
         "" => String::from("Swedbank"),
         "SumUp" => drop_words(memo, "*", 1),
+        "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
         p if p.starts_with("AMZN Digital*") => String::from(p).replace("'", ""),
         p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
         p => String::from(p).replace("'", ""),
@@ -92,17 +93,21 @@ fn fmt_date(d: &str) -> String {
     parts.join("-")
 }
 
+fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
+    match memo {
+        m if !payee.is_empty() && m.starts_with(payee) => None,
+        m if payee == "MakeCommerce" => m.split(", ").nth(3).map(String::from),
+        m => Some(String::from(m)),
+    }
+}
+
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     let memo = ParsedMemo::from_memo_str(&row.memo);
     YnabTransaction {
         import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type),
         date: fmt_date(&memo.date.unwrap_or(row.date)),
         payee_name: fmt_payee(&row.payee, &row.memo),
-        memo: if !row.payee.is_empty() && memo.memo.starts_with(&row.payee) {
-            None
-        } else {
-            Some(memo.memo)
-        },
+        memo: fmt_memo(&row.payee, &memo.memo),
         cleared: String::from("cleared"),
         amount: fmt_amount(&row.amount, &row.debit_or_credit),
         account_id: String::from(account_id),
@@ -247,6 +252,28 @@ mod tests {
     #[test]
     fn test_escapable_payee() {
         assert_eq!(fmt_payee("'Foobar", "Test"), "Foobar");
+    }
+
+    #[test]
+    fn test_makecommerce_payee() {
+        assert_eq!(
+            fmt_payee(
+                "MakeCommerce",
+                "Maksekeskus/EE, st123, Actual Payee, Actual tx Memo, (123)"
+            ),
+            "Actual Payee"
+        );
+    }
+
+    #[test]
+    fn test_makecommerce_memo() {
+        assert_eq!(
+            fmt_memo(
+                "MakeCommerce",
+                "Maksekeskus/EE, st123, Actual Payee, Actual tx Memo99, (123)"
+            ),
+            Some(String::from("Actual tx Memo99"))
+        );
     }
 
     #[test]
