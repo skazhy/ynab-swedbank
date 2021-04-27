@@ -3,7 +3,7 @@ use std::error::Error;
 extern crate serde;
 use serde::{Deserialize, Serialize};
 
-static API_URL: &str = "https://api.youneedabudget.com/v1/budgets";
+static API_URL: &str = "https://api.youneedabudget.com";
 static APP_URL: &str = "https://app.youneedabudget.com";
 
 enum UrlType {
@@ -108,7 +108,7 @@ impl YnabClient {
     fn account_uri(self: &Self, url_type: UrlType) -> String {
         match url_type {
             UrlType::ApiUrl => format!("{}/{}/accounts/{}", API_URL, self.budget_id, self.account_id),
-            UrlType::AppUrl => format!("{}/{}/accounts/{}", APP_URL, self.budget_id, self.account_id),
+            UrlType::AppUrl => format!("{}/v1/budgets/{}/accounts/{}", APP_URL, self.budget_id, self.account_id),
         }
     }
 
