@@ -3,6 +3,14 @@ use std::error::Error;
 extern crate serde;
 use serde::{Deserialize, Serialize};
 
+static API_URL: &str = "https://api.youneedabudget.com/v1/budgets";
+static APP_URL: &str = "https://app.youneedabudget.com";
+
+enum UrlType {
+    AppUrl,
+    ApiUrl,
+}
+
 pub fn parse_i64_string(i: &str) -> Option<i64> {
     i64::from_str_radix(&i.replace(",", ""), 10).ok()
 }
@@ -94,21 +102,22 @@ struct PostTransactionsRequest<T> {
 
 impl YnabClient {
     fn transactions_uri(self: &Self) -> String {
-        format!(
-            "https://api.youneedabudget.com/v1/budgets/{}/transactions",
-            self.budget_id
-        )
+        format!("{}/{}/transactions", API_URL, self.budget_id)
     }
 
-    fn account_uri(self: &Self) -> String {
-        format!(
-            "https://api.youneedabudget.com/v1/budgets/{}/accounts/{}",
-            self.budget_id, self.account_id
-        )
+    fn account_uri(self: &Self, url_type: UrlType) -> String {
+        match url_type {
+            UrlType::ApiUrl => format!("{}/{}/accounts/{}", API_URL, self.budget_id, self.account_id),
+            UrlType::AppUrl => format!("{}/{}/accounts/{}", APP_URL, self.budget_id, self.account_id),
+        }
+    }
+
+    pub fn app_account_uri(self: &Self) -> String {
+        self.account_uri(UrlType::AppUrl)
     }
 
     fn budget_uri(self: &Self) -> String {
-        format!("https://api.youneedabudget.com/v1/budgets/{}", self.budget_id)
+        format!("{}/{}", API_URL, self.budget_id)
     }
 
     fn get(self: &Self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
@@ -136,7 +145,7 @@ impl YnabClient {
     }
 
     pub fn get_acccount_balance(self: &Self) -> Result<i64, Box<dyn Error>> {
-        let res: GetAccountResponse = self.get(&self.account_uri())?.json()?;
+        let res: GetAccountResponse = self.get(&self.account_uri(UrlType::ApiUrl))?.json()?;
         Ok(res.data.account.balance)
     }
 }

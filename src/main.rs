@@ -161,6 +161,10 @@ fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
     println!("{} new transactions imported", imported);
     println!("{} duplicates found", duplicates);
 
+    if imported > 0 {
+        println!("See new transactions in app: {}", client.app_account_uri());
+    }
+
     let ynab_balance = client.get_acccount_balance()? / 10;
     if ynab_balance != csv_balance {
         println!("== Warning: balance mismatch:");
