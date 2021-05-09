@@ -12,7 +12,7 @@ enum UrlType {
 }
 
 pub fn parse_i64_string(i: &str) -> Option<i64> {
-    i64::from_str_radix(&i.replace(",", ""), 10).ok()
+    i.replace(",", "").parse::<i64>().ok()
 }
 
 fn no_rollup() -> bool {
@@ -34,7 +34,7 @@ pub struct YnabTransaction {
 }
 
 impl YnabTransaction {
-    pub fn add_amount(self: Self, commission: i64) -> Self {
+    pub fn add_amount(self, commission: i64) -> Self {
         YnabTransaction {
             amount: self.amount + commission,
             ..self
@@ -101,50 +101,47 @@ struct PostTransactionsRequest<T> {
 }
 
 impl YnabClient {
-    fn transactions_uri(self: &Self) -> String {
-        format!("{}/{}/transactions", API_URL, self.budget_id)
+    fn transactions_uri(&self) -> String {
+        format!("{}/v1/budgets/{}/transactions", API_URL, self.budget_id)
     }
 
-    fn account_uri(self: &Self, url_type: UrlType) -> String {
+    fn account_uri(&self, url_type: UrlType) -> String {
         match url_type {
-            UrlType::ApiUrl => format!("{}/{}/accounts/{}", API_URL, self.budget_id, self.account_id),
-            UrlType::AppUrl => format!("{}/v1/budgets/{}/accounts/{}", APP_URL, self.budget_id, self.account_id),
+            UrlType::ApiUrl => format!("{}/v1/budgets/{}/accounts/{}", API_URL, self.budget_id, self.account_id),
+            UrlType::AppUrl => format!("{}/{}/accounts/{}", APP_URL, self.budget_id, self.account_id),
         }
     }
 
-    pub fn app_account_uri(self: &Self) -> String {
+    pub fn app_account_uri(&self) -> String {
         self.account_uri(UrlType::AppUrl)
     }
 
-    fn budget_uri(self: &Self) -> String {
-        format!("{}/{}", API_URL, self.budget_id)
+    fn budget_uri(&self) -> String {
+        format!("{}/v1/budgets/{}", API_URL, self.budget_id)
     }
 
-    fn get(self: &Self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn get(&self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
         client.get(uri).bearer_auth(&self.token).send()
     }
 
-    fn post<T: Serialize>(self: &Self, body: T, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn post<T: Serialize>(&self, body: T, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
         client.post(uri).bearer_auth(&self.token).json(&body).send()
     }
 
-    pub fn post_transactions<T: Serialize>(
-        self: &Self,
-        txns: T,
-    ) -> Result<PostTransactionsResponseData, Box<dyn Error>> {
+    pub fn post_transactions<T: Serialize>(&self, txns: T) -> Result<PostTransactionsResponseData, Box<dyn Error>> {
         let body = PostTransactionsRequest { transactions: txns };
         let res: PostTransactionsResponse = self.post(body, &self.transactions_uri())?.json()?;
         Ok(res.data)
     }
 
-    pub fn get_budget_currency(self: &Self) -> Result<String, Box<dyn Error>> {
+    pub fn get_budget_currency(&self) -> Result<String, Box<dyn Error>> {
         let res: GetBudgetResponse = self.get(&self.budget_uri())?.json()?;
         Ok(res.data.budget.currency_format.iso_code)
     }
 
-    pub fn get_acccount_balance(self: &Self) -> Result<i64, Box<dyn Error>> {
+    pub fn get_acccount_balance(&self) -> Result<i64, Box<dyn Error>> {
         let res: GetAccountResponse = self.get(&self.account_uri(UrlType::ApiUrl))?.json()?;
         Ok(res.data.account.balance)
     }
