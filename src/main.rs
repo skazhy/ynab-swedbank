@@ -51,7 +51,7 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
 fn fmt_payee(payee: &str, memo: &str) -> String {
     match payee {
         "" => String::from("Swedbank"),
-        "SumUp" => drop_words(memo, "*", 1),
+        "SumUp" => drop_words(memo, "SumUp  *", 1),
         "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
         p if p.starts_with("AMZN Digital*") => String::from(p).replace("'", ""),
         p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
@@ -236,6 +236,14 @@ mod tests {
     #[test]
     fn test_sumup_payee() {
         assert_eq!(fmt_payee("SumUp", "SumUp  *Foobar 1"), "Foobar 1");
+    }
+
+    #[test]
+    fn test_sumup_payee2() {
+        assert_eq!(
+            fmt_payee("SumUp", "PIRKUMS 0***1 28.12.2021 5.00 EUR (123456) SumUp  *Abc"),
+            "Abc"
+        );
     }
 
     #[test]
