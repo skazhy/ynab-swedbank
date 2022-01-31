@@ -5,6 +5,9 @@ use std::process;
 extern crate clap;
 use clap::{App, Arg};
 
+#[macro_use]
+extern crate lazy_static;
+
 mod swed;
 use swed::*;
 
@@ -47,15 +50,26 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
         .join(splitter)
 }
 
+lazy_static! {
+    // Vector of well-known vendor names that can show up before the asterisk in the payee field.
+    static ref VENDORS: Vec<&'static str> = {
+        vec!["AMZN Digital", "AIRBNB", "Patreon"]
+    };
+}
+
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
 fn fmt_payee(payee: &str, memo: &str) -> String {
-    match payee {
-        "" => String::from("Swedbank"),
-        "SumUp" => drop_words(memo, "SumUp  *", 1),
-        "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
-        p if p.starts_with("AMZN Digital*") => String::from(p).replace("'", ""),
-        p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
-        p => String::from(p).replace("'", ""),
+    // TODO: use if let in match guard once it's stable.
+    if let Some(vendor) = VENDORS.iter().find(|&&v| payee.starts_with(v)) {
+        vendor.to_string()
+    } else {
+        match payee {
+            "" => String::from("Swedbank"),
+            "SumUp" => drop_words(memo, "SumUp  *", 1),
+            "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
+            p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
+            p => String::from(p).replace("'", ""),
+        }
     }
 }
 
@@ -258,7 +272,17 @@ mod tests {
 
     #[test]
     fn test_amazon_payee() {
-        assert_eq!(fmt_payee("AMZN Digital*Foo 111", "memo!"), "AMZN Digital*Foo 111");
+        assert_eq!(fmt_payee("AMZN Digital*Foo 111", "memo!"), "AMZN Digital");
+    }
+
+    #[test]
+    fn test_patreon_payee() {
+        assert_eq!(fmt_payee("Patreon* Membership", "memo!"), "Patreon");
+    }
+
+    #[test]
+    fn test_airbnb_payee() {
+        assert_eq!(fmt_payee("AIRBNB * FOOBAR 000 999-101-1111", "memo!"), "AIRBNB");
     }
 
     #[test]
