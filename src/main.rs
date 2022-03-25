@@ -53,7 +53,7 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
 lazy_static! {
     // Vector of well-known vendor names that can show up before the asterisk in the payee field.
     static ref VENDORS: Vec<&'static str> = {
-        vec!["AMZN Digital", "AIRBNB", "Patreon"]
+        vec!["AIRBNB", "AMZN Digital", "AUTOSTAVVIETA", "Patreon"]
     };
 }
 
