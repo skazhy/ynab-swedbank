@@ -68,6 +68,9 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
             "SumUp" => drop_words(memo, "SumUp  *", 1),
             "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
             "Trustly Group AB" => memo.split_once(" ").map_or(String::from(""), |s| String::from(s.1)),
+            "Paysera LT" => memo
+                .split_once(" pardevejs: ")
+                .map_or(String::from(""), |s| String::from(s.1)),
             p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
             p => String::from(p).replace("'", ""),
         }
@@ -113,6 +116,7 @@ fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
         m if !payee.is_empty() && m.starts_with(payee) => None,
         m if payee == "MakeCommerce" => m.split(", ").nth(3).map(String::from),
         m if payee == "Trustly Group AB" => m.split_once(" ").map(|s| String::from(s.0)),
+        m if payee == "Paysera LT" => m.split_once(" pardevejs: ").map(|s| String::from(s.0)),
         m => Some(String::from(m)),
     }
 }
@@ -309,6 +313,17 @@ mod tests {
     }
 
     #[test]
+    fn test_paysera_payee() {
+        assert_eq!(
+            fmt_payee(
+                "Paysera LT",
+                "R000 Pasutijums Nr. 14, projekts https://www.kartes.lv pardevejs: Jana seta"
+            ),
+            "Jana seta"
+        );
+    }
+
+    #[test]
     fn test_makecommerce_memo() {
         assert_eq!(
             fmt_memo(
@@ -325,6 +340,17 @@ mod tests {
             fmt_memo("Trustly Group AB", "1234 Seller Yo"),
             Some(String::from("1234"))
         );
+    }
+
+    #[test]
+    fn test_paysera_memo() {
+        assert_eq!(
+            fmt_memo(
+                "Paysera LT",
+                "R000 Pasutijums Nr. 14, projekts https://www.kartes.lv pardevejs: Jana seta"
+            ),
+            Some(String::from("R000 Pasutijums Nr. 14, projekts https://www.kartes.lv"))
+        )
     }
 
     #[test]
