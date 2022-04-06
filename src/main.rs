@@ -67,6 +67,7 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
             "" => String::from("Swedbank"),
             "SumUp" => drop_words(memo, "SumUp  *", 1),
             "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
+            "Trustly Group AB" => memo.split_once(" ").map_or(String::from(""), |s| String::from(s.1)),
             p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
             p => String::from(p).replace("'", ""),
         }
@@ -111,6 +112,7 @@ fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
     match memo {
         m if !payee.is_empty() && m.starts_with(payee) => None,
         m if payee == "MakeCommerce" => m.split(", ").nth(3).map(String::from),
+        m if payee == "Trustly Group AB" => m.split_once(" ").map(|s| String::from(s.0)),
         m => Some(String::from(m)),
     }
 }
@@ -302,6 +304,11 @@ mod tests {
     }
 
     #[test]
+    fn test_trustly_payee() {
+        assert_eq!(fmt_payee("Trustly Group AB", "1234 Seller Yo"), "Seller Yo");
+    }
+
+    #[test]
     fn test_makecommerce_memo() {
         assert_eq!(
             fmt_memo(
@@ -309,6 +316,14 @@ mod tests {
                 "Maksekeskus/EE, st123, Actual Payee, Actual tx Memo99, (123)"
             ),
             Some(String::from("Actual tx Memo99"))
+        );
+    }
+
+    #[test]
+    fn test_trustly_memo() {
+        assert_eq!(
+            fmt_memo("Trustly Group AB", "1234 Seller Yo"),
+            Some(String::from("1234"))
         );
     }
 
