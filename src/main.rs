@@ -93,11 +93,12 @@ fn needs_rollup(memo: &str, payment_type: &str) -> bool {
     payment_type == "KOM" && memo.ends_with(" apkalpošanas komisija")
 }
 
-// Commission entries are separate records in the CSV, but their transaction ids
-// are the same as the main transaction. Create a unique transaction id for
-// commissions that we'd want to get as separate entries in YNAB.
-fn fmt_transaction_id(transaction_id: &str, payment_type: &str) -> String {
-    if payment_type == "KOM" {
+// Commission entries (KOM) are separate records in the CSV, but their transaction ids
+// are the same as the main transaction.
+// Loan repayments (AZA) are split in two entries, one of which has no payee & both
+// have the same tx id as well.
+fn fmt_transaction_id(transaction_id: &str, payment_type: &str, payee: &str) -> String {
+    if (payment_type == "KOM") || (payment_type == "AZA" && payee.is_empty()) {
         format!("{}_1", transaction_id)
     } else {
         String::from(transaction_id)
@@ -124,7 +125,7 @@ fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
     let memo = ParsedMemo::from_memo_str(&row.memo);
     YnabTransaction {
-        import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type),
+        import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type, &row.payee),
         date: fmt_date(&memo.date.unwrap_or(row.date)),
         payee_name: fmt_payee(&row.payee, &row.memo),
         memo: fmt_memo(&row.payee, &memo.memo),
@@ -370,12 +371,22 @@ mod tests {
 
     #[test]
     fn test_commission_txid() {
-        assert_eq!(fmt_transaction_id("123", "KOM"), String::from("123_1"));
+        assert_eq!(fmt_transaction_id("123", "KOM", "Foo"), String::from("123_1"));
     }
 
     #[test]
     fn test_purchase_txid() {
-        assert_eq!(fmt_transaction_id("123", "CTX"), String::from("123"));
+        assert_eq!(fmt_transaction_id("123", "CTX", "Foo"), String::from("123"));
+    }
+
+    #[test]
+    fn test_aza_txid_with_payee() {
+        assert_eq!(fmt_transaction_id("123", "AZA", "Foo Bar"), String::from("123"));
+    }
+
+    #[test]
+    fn test_aza_txid_no_payee() {
+        assert_eq!(fmt_transaction_id("123", "AZA", ""), String::from("123_1"));
     }
 
     #[test]
