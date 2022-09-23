@@ -53,7 +53,7 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
 lazy_static! {
     // Vector of well-known vendor names that can show up before the asterisk in the payee field.
     static ref VENDORS: Vec<&'static str> = {
-        vec!["AIRBNB", "AMZN Digital", "AUTOSTAVVIETA", "Patreon"]
+        vec!["AIRBNB", "AMZN Digital", "AUTOSTAVVIETA", "Patreon", "Kindle Svcs"]
     };
 }
 
@@ -280,6 +280,14 @@ mod tests {
     #[test]
     fn test_amazon_payee() {
         assert_eq!(fmt_payee("AMZN Digital*Foo 111", "memo!"), "AMZN Digital");
+    }
+
+    #[test]
+    fn test_kindle_payee() {
+        assert_eq!(
+            fmt_payee("Kindle Svcs*0F00T0000 00000 000-000-0000", "memo!"),
+            "Kindle Svcs"
+        );
     }
 
     #[test]
