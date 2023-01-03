@@ -1,15 +1,13 @@
 # YNAB API client for Swedbank
 
-`ynab-swed` imports Swedbank CSVs into YNAB via their API. YNAB API ids can be
-either provided via env vars or through command line options. Transaction fees
-are automatically appended to transactions.
+`ynab-swed` is an opinionated [Swedbank](https://swedbank.com/) account statement importer for [YNAB](https://www.youneedabudget.com/).
 
 ## Setup
 
-* Install [Rust](https://www.rust-lang.org/learn/get-started)
-* `cargo build`
-* Generate a [personal YNAB access token](https://app.youneedabudget.com/settings/developer)
-* Get your account and budget ids from an account url: `https://app.youneedabudget.com/BUDGET_ID/accounts/ACCOUNT_ID`
+- Install [Rust](https://www.rust-lang.org/learn/get-started) (Rust 2021 edition is used)
+- Run `cargo build`
+- Generate a [personal YNAB access token](https://app.youneedabudget.com/settings/developer)
+- Get your account and budget ids from an account url: `https://app.youneedabudget.com/BUDGET_ID/accounts/ACCOUNT_ID`
 
 ## Usage
 
@@ -30,16 +28,35 @@ ARGS:
     <CSV_PATH>    Path for Swedbank CSV export [defaults to out.csv]
 ```
 
-## Testing
+`ynab-swed` takes a single account statement CSV file and imports it into the
+provided YNAB account. Identifiers (access token, budget and account ids) can be either provided as
+env vars or through command line options.
 
-```
-cargo test
-```
+Currency of the destination YNAB account is used & only transactions in that
+currency are imported. In the case of multi-currency Swedbank statements,
+you'll need to run the script multiple times, with a different budget/account
+ids for each currency.
 
-## Linting and formatting
+## Imported data formatting
 
-I'm using [clippy](https://github.com/rust-lang/rust-clippy) for linting &
-`rustfmt` for formatting. I'm using this as a pre-commit hook:
+Transaction fees are appended to their respective transactions and are not
+imported as separate entries.
+
+`ynab-swed` tries it's best to strip [merchants of record](https://www.paddle.com/blog/what-is-merchant-of-record)
+from resulting data, so that the actual seller is imported as the payee.
+Please open an issue if something is imported in a format you did not expect!
+
+Reference for the input CSV can be found here ([PDF](https://www.swedbank.lv/static/pdf/business/d2d/payments/import/CSVformat_lv.pdf)).
+The full spec has not been implemented and only the fields relevant to YNAB
+are used.
+
+## Testing, linting, and formatting
+
+Unit tests are run in the standard Rust fashion: `cargo test`.
+
+[clippy](https://github.com/rust-lang/rust-clippy) is used for linting &
+`rustfmt` for formatting. Here's a git pre-commit hook that's used for this
+project:
 
 ```sh
 #!/bin/sh
@@ -51,5 +68,3 @@ for FILE in `git diff --cached --name-only -- \*.rs`; do
   fi
 done
 ```
-
-Reference for the input CSV can be found here ([PDF](https://www.swedbank.lv/static/pdf/business/d2d/payments/import/CSVformat_lv.pdf)).
