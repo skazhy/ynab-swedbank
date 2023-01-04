@@ -59,7 +59,6 @@ lazy_static! {
 
 /// Formats the payee, defaults to "Swedbank" if the field is empty.
 fn fmt_payee(payee: &str, memo: &str) -> String {
-    // TODO: use if let in match guard once it's stable.
     if let Some(vendor) = VENDORS.iter().find(|&&v| payee.starts_with(v)) {
         vendor.to_string()
     } else {
