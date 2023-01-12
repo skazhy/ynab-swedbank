@@ -88,16 +88,19 @@ fn fmt_amount(amount: &str, tx_type: &EntryType) -> i64 {
 
 // Returns true if the given transaction contains extra processing fees that need
 // to be applied to the previous transaction.
+#[inline]
 fn needs_rollup(memo: &str, payment_type: &str) -> bool {
-    payment_type == "KOM" && memo.ends_with(" apkalpošanas komisija")
+    is_comission(payment_type) && memo.ends_with(" apkalpošanas komisija")
+}
+#[inline]
+fn duplicate_transaction_id(payment_type: &str, payee: &str) -> bool {
+    // Bank commissions are separate entries in the CSV, but their transaction ids are the same as the main transaction.
+    // Loan repayments are split in two entries, one of which has no payee.
+    is_comission(payment_type) || is_loan_repayment(payment_type) && payee.is_empty()
 }
 
-// Commission entries (KOM) are separate records in the CSV, but their transaction ids
-// are the same as the main transaction.
-// Loan repayments (AZA) are split in two entries, one of which has no payee & both
-// have the same tx id as well.
 fn fmt_transaction_id(transaction_id: &str, payment_type: &str, payee: &str) -> String {
-    if (payment_type == "KOM") || (payment_type == "AZA" && payee.is_empty()) {
+    if duplicate_transaction_id(payment_type, payee) {
         format!("{}_1", transaction_id)
     } else {
         String::from(transaction_id)

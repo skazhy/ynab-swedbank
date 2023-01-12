@@ -44,3 +44,13 @@ pub struct SwedbankCsv {
     #[serde(rename = "Maksājuma veids")] // 9
     pub payment_type: String,
 }
+
+#[inline]
+pub fn is_comission(payment_type: &str) -> bool {
+    payment_type == "KOM"
+}
+
+#[inline]
+pub fn is_loan_repayment(payment_type: &str) -> bool {
+    payment_type == "AZA"
+}
