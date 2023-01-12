@@ -25,23 +25,23 @@ pub enum RecordType {
 
 #[derive(Debug, Deserialize)]
 pub struct SwedbankCsv {
-    #[serde(rename = "Ieraksta tips")] // 1
+    #[serde(rename = "Ieraksta tips")]
     pub record_type: RecordType,
-    #[serde(rename = "Datums")] // 2
+    #[serde(rename = "Datums")]
     pub date: String,
-    #[serde(rename = "Saņēmējs/Maksātājs")] // 3
+    #[serde(rename = "Saņēmējs/Maksātājs")]
     pub payee: String,
-    #[serde(rename = "Informācija saņēmējam")] // 4
+    #[serde(rename = "Informācija saņēmējam")]
     pub memo: String,
-    #[serde(rename = "Summa")] // 5
+    #[serde(rename = "Summa")]
     pub amount: String,
-    #[serde(rename = "Valūta")] // 5
+    #[serde(rename = "Valūta")]
     pub currency: String,
-    #[serde(rename = "Debets/Kredīts")] // 7
+    #[serde(rename = "Debets/Kredīts")]
     pub debit_or_credit: EntryType,
-    #[serde(rename = "Arhīva kods")] // 7
+    #[serde(rename = "Arhīva kods")]
     pub transaction_id: String,
-    #[serde(rename = "Maksājuma veids")] // 9
+    #[serde(rename = "Maksājuma veids")]
     pub payment_type: String,
 }
 
