@@ -70,6 +70,7 @@ fn fmt_payee(payee: &str, memo: &str) -> String {
             "Paysera LT" => memo
                 .split_once(" pardevejs: ")
                 .map_or(String::from(""), |s| String::from(s.1)),
+            p if p.starts_with("Revolut**") => String::from("Revolut"),
             p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
             p => String::from(p).replace("'", ""),
         }
@@ -321,6 +322,11 @@ mod tests {
     #[test]
     fn test_trustly_payee() {
         assert_eq!(fmt_payee("Trustly Group AB", "1234 Seller Yo"), "Seller Yo");
+    }
+
+    #[test]
+    fn test_revolut_payee() {
+        assert_eq!(fmt_payee("Revolut**1234* D02 R296 Dublin", "PIRKUMS 123******1234 01.08.2023 10.00 EUR (123) Revolut**1234* D02 R296 Dublin"), "Revolut")
     }
 
     #[test]
