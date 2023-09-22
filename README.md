@@ -37,6 +37,8 @@ currency are imported. In the case of multi-currency Swedbank statements,
 you'll need to run the script multiple times, with a different budget/account
 ids for each currency.
 
+Debug loglevel can be set with `RUST_LOG` env variable, which corresponds to [one of these](https://docs.rs/log/latest/log/enum.Level.html).
+
 ## Imported data formatting
 
 Transaction fees are appended to their respective transactions and are not

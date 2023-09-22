@@ -4,6 +4,7 @@ use std::process;
 
 extern crate clap;
 use clap::{App, Arg};
+use env_logger;
 
 #[macro_use]
 extern crate lazy_static;
@@ -201,6 +202,7 @@ fn run(csv_file: File, client: YnabClient) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> std::io::Result<()> {
+    env_logger::init();
     let args = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
