@@ -3,6 +3,8 @@ use std::error::Error;
 extern crate serde;
 use serde::{Deserialize, Serialize};
 
+use log::{debug, error};
+
 static API_URL: &str = "https://api.youneedabudget.com";
 static APP_URL: &str = "https://app.youneedabudget.com";
 
@@ -122,12 +124,18 @@ impl YnabClient {
 
     fn get(&self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.get(uri).bearer_auth(&self.token).send()
+        client.get(uri).bearer_auth(&self.token).send().map(|r| {
+            debug!("GET {} -> {:?}", uri, r);
+            r
+        }).map_err(|e| {error!("GET {} -> {:?}", uri, e); e})
     }
 
     fn post<T: Serialize>(&self, body: T, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.post(uri).bearer_auth(&self.token).json(&body).send()
+        client.post(uri).bearer_auth(&self.token).json(&body).send().map(|r| {
+            debug!("POST {} -> {:?}", uri, r);
+            r
+        }).map_err(|e| {error!("POST {} -> {:?}", uri, e); e})
     }
 
     pub fn post_transactions<T: Serialize>(&self, txns: T) -> Result<PostTransactionsResponseData, Box<dyn Error>> {
