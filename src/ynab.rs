@@ -45,9 +45,9 @@ impl YnabTransaction {
 }
 
 pub struct YnabClient {
-    pub budget_id: String,
+    budget_id: String,
     pub account_id: String,
-    pub token: String,
+    client: reqwest::blocking::Client,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +103,23 @@ struct PostTransactionsRequest<T> {
 }
 
 impl YnabClient {
+    pub fn new(budget_id: String, account_id: String, token: &str) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+        );
+
+        Self {
+            budget_id,
+            account_id,
+            client: reqwest::blocking::Client::builder()
+                .default_headers(headers)
+                .build()
+                .unwrap(),
+        }
+    }
+
     fn transactions_uri(&self) -> String {
         format!("{}/v1/budgets/{}/transactions", API_URL, self.budget_id)
     }
@@ -123,10 +140,8 @@ impl YnabClient {
     }
 
     fn get<T: for<'a> Deserialize<'a>>(&self, uri: &str) -> Result<T, reqwest::Error> {
-        let client = reqwest::blocking::Client::new();
-        client
+        self.client
             .get(uri)
-            .bearer_auth(&self.token)
             .send()
             .and_then(|r| {
                 debug!("GET {} -> {:?}", uri, r);
@@ -139,10 +154,8 @@ impl YnabClient {
     }
 
     fn post<S: Serialize, D: for<'a> Deserialize<'a>>(&self, body: S, uri: &str) -> Result<D, reqwest::Error> {
-        let client = reqwest::blocking::Client::new();
-        client
+        self.client
             .post(uri)
-            .bearer_auth(&self.token)
             .json(&body)
             .send()
             .and_then(|r| {

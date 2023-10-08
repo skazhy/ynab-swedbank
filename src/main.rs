@@ -236,11 +236,11 @@ fn main() -> std::io::Result<()> {
         )
         .get_matches();
 
-    let client = YnabClient {
-        budget_id: args.value_of("budget").unwrap_or("").to_string(),
-        account_id: args.value_of("account").unwrap_or("").to_string(),
-        token: args.value_of("token").unwrap_or("").to_string(),
-    };
+    let client = YnabClient::new(
+        args.value_of("budget").unwrap_or("").to_string(),
+        args.value_of("account").unwrap_or("").to_string(),
+        args.value_of("token").unwrap_or(""),
+    );
 
     if let Err(err) = run(File::open(args.value_of("CSV_PATH").unwrap())?, client) {
         println!("{}", err);
