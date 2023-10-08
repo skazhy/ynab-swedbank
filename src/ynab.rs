@@ -122,35 +122,52 @@ impl YnabClient {
         format!("{}/v1/budgets/{}", API_URL, self.budget_id)
     }
 
-    fn get(&self, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn get<T: for<'a> Deserialize<'a>>(&self, uri: &str) -> Result<T, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.get(uri).bearer_auth(&self.token).send().map(|r| {
-            debug!("GET {} -> {:?}", uri, r);
-            r
-        }).map_err(|e| {error!("GET {} -> {:?}", uri, e); e})
+        client
+            .get(uri)
+            .bearer_auth(&self.token)
+            .send()
+            .and_then(|r| {
+                debug!("GET {} -> {:?}", uri, r);
+                r.json()
+            })
+            .map_err(|e| {
+                error!("GET {} -> {:?}", uri, e);
+                e
+            })
     }
 
-    fn post<T: Serialize>(&self, body: T, uri: &str) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn post<S: Serialize, D: for<'a> Deserialize<'a>>(&self, body: S, uri: &str) -> Result<D, reqwest::Error> {
         let client = reqwest::blocking::Client::new();
-        client.post(uri).bearer_auth(&self.token).json(&body).send().map(|r| {
-            debug!("POST {} -> {:?}", uri, r);
-            r
-        }).map_err(|e| {error!("POST {} -> {:?}", uri, e); e})
+        client
+            .post(uri)
+            .bearer_auth(&self.token)
+            .json(&body)
+            .send()
+            .and_then(|r| {
+                debug!("POST {} -> {:?}", uri, r);
+                r.json()
+            })
+            .map_err(|e| {
+                error!("POST {} -> {:?}", uri, e);
+                e
+            })
     }
 
     pub fn post_transactions<T: Serialize>(&self, txns: T) -> Result<PostTransactionsResponseData, Box<dyn Error>> {
         let body = PostTransactionsRequest { transactions: txns };
-        let res: PostTransactionsResponse = self.post(body, &self.transactions_uri())?.json()?;
+        let res: PostTransactionsResponse = self.post(body, &self.transactions_uri())?;
         Ok(res.data)
     }
 
     pub fn get_budget_currency(&self) -> Result<String, Box<dyn Error>> {
-        let res: GetBudgetResponse = self.get(&self.budget_uri())?.json()?;
+        let res: GetBudgetResponse = self.get(&self.budget_uri())?;
         Ok(res.data.budget.currency_format.iso_code)
     }
 
     pub fn get_acccount_balance(&self) -> Result<i64, Box<dyn Error>> {
-        let res: GetAccountResponse = self.get(&self.account_uri(UrlType::ApiUrl))?.json()?;
+        let res: GetAccountResponse = self.get(&self.account_uri(UrlType::ApiUrl))?;
         Ok(res.data.account.balance)
     }
 }
