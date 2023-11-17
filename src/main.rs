@@ -4,7 +4,6 @@ use std::process;
 
 extern crate clap;
 use clap::{App, Arg};
-use env_logger;
 
 #[macro_use]
 extern crate lazy_static;
@@ -15,30 +14,10 @@ use swed::*;
 mod ynab;
 use ynab::*;
 
-struct ParsedMemo {
+struct ParsedPayeeMemo {
     date: Option<String>,
-    memo: String,
-}
-
-impl ParsedMemo {
-    pub fn from_memo_str(m: &str) -> ParsedMemo {
-        if m.starts_with("PIRKUMS ") {
-            let m2 = if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
-                drop_words(m, " ", 13)
-            } else {
-                drop_words(m, " ", 6)
-            };
-            ParsedMemo {
-                date: m.split(' ').nth(2).map(String::from),
-                memo: m2.replace("'", ""),
-            }
-        } else {
-            ParsedMemo {
-                date: None,
-                memo: String::from(m).replace("'", ""),
-            }
-        }
-    }
+    memo: Option<String>,
+    payee: String,
 }
 
 /// Splits the string with given splitter, drops n first items
@@ -58,22 +37,47 @@ lazy_static! {
     };
 }
 
-/// Formats the payee, defaults to "Swedbank" if the field is empty.
-fn fmt_payee(payee: &str, memo: &str) -> String {
-    if let Some(vendor) = VENDORS.iter().find(|&&v| payee.starts_with(v)) {
-        vendor.to_string()
-    } else {
-        match payee {
-            "" => String::from("Swedbank"),
-            "SumUp" => drop_words(memo, "SumUp  *", 1),
-            "MakeCommerce" => memo.split(", ").nth(2).map_or(String::from(""), String::from),
-            "Trustly Group AB" => memo.split_once(" ").map_or(String::from(""), |s| String::from(s.1)),
-            "Paysera LT" => memo
-                .split_once(" pardevejs: ")
-                .map_or(String::from(""), |s| String::from(s.1)),
-            p if p.starts_with("Revolut**") => String::from("Revolut"),
-            p if p.contains('*') => drop_words(payee, "*", 1).replace("'", "").trim_start().to_string(),
-            p => String::from(p).replace("'", ""),
+impl ParsedPayeeMemo {
+    pub fn from_str(payee: &str, m: &str) -> ParsedPayeeMemo {
+        let mut sanitized_memo = String::from(m).replace('\'', "").replace("  ", " ");
+        let mut date = None;
+
+        if m.starts_with("PIRKUMS ") {
+            sanitized_memo = if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
+                drop_words(&sanitized_memo, " ", 13)
+            } else {
+                drop_words(&sanitized_memo, " ", 6)
+            };
+            date = m.split(' ').nth(2).map(String::from);
+        }
+
+        let (fmtd_payee, fmtd_memo) = match payee {
+            "MakeCommerce" => parse_makecommerce_memo(&sanitized_memo),
+            "Trustly Group AB" => parse_trustly_memo(&sanitized_memo),
+            "Paysera LT" => parse_paysera_memo(&sanitized_memo),
+            "" => (String::from("Swedbank"), Some(String::from(&sanitized_memo))),
+            _ => (
+                if let Some(vendor) = VENDORS.iter().find(|&&v| payee.starts_with(v)) {
+                    vendor.to_string()
+                } else {
+                    match payee {
+                        "SumUp" => String::from(sanitized_memo.trim_start_matches("SumUp *")),
+                        p if p.starts_with("Revolut**") => String::from("Revolut"),
+                        p if p.contains('*') => drop_words(payee, "*", 1).replace('\'', "").trim_start().to_string(),
+                        p => String::from(p).replace('\'', ""),
+                    }
+                },
+                match sanitized_memo {
+                    ref m if m.starts_with(payee) => None,
+                    ref m => Some(String::from(m)),
+                },
+            ),
+        };
+
+        ParsedPayeeMemo {
+            date,
+            memo: fmtd_memo,
+            payee: fmtd_payee,
         }
     }
 }
@@ -116,23 +120,13 @@ fn fmt_date(d: &str) -> String {
     parts.join("-")
 }
 
-fn fmt_memo(payee: &str, memo: &str) -> Option<String> {
-    match memo {
-        m if !payee.is_empty() && m.starts_with(payee) => None,
-        m if payee == "MakeCommerce" => m.split(", ").nth(3).map(String::from),
-        m if payee == "Trustly Group AB" => m.split_once(" ").map(|s| String::from(s.0)),
-        m if payee == "Paysera LT" => m.split_once(" pardevejs: ").map(|s| String::from(s.0)),
-        m => Some(String::from(m)),
-    }
-}
-
 fn from_transaction_row(row: SwedbankCsv, account_id: &str) -> YnabTransaction {
-    let memo = ParsedMemo::from_memo_str(&row.memo);
+    let memo = ParsedPayeeMemo::from_str(&row.payee, &row.memo);
     YnabTransaction {
         import_id: fmt_transaction_id(&row.transaction_id, &row.payment_type, &row.payee),
         date: fmt_date(&memo.date.unwrap_or(row.date)),
-        payee_name: fmt_payee(&row.payee, &row.memo),
-        memo: fmt_memo(&row.payee, &memo.memo),
+        payee_name: memo.payee,
+        memo: memo.memo,
         cleared: String::from("cleared"),
         amount: fmt_amount(&row.amount, &row.debit_or_credit),
         account_id: String::from(account_id),
@@ -256,120 +250,94 @@ mod tests {
 
     #[test]
     fn test_absent_payee() {
-        assert_eq!(fmt_payee("", "Payment"), "Swedbank");
+        assert_eq!(ParsedPayeeMemo::from_str("", "Payment").payee, "Swedbank");
     }
 
     #[test]
     fn test_sumup_payee() {
-        assert_eq!(fmt_payee("SumUp", "SumUp  *Foobar 1"), "Foobar 1");
+        assert_eq!(ParsedPayeeMemo::from_str("SumUp", "SumUp  *Foobar 1").payee, "Foobar 1");
     }
 
     #[test]
     fn test_sumup_payee2() {
         assert_eq!(
-            fmt_payee("SumUp", "PIRKUMS 0***1 28.12.2021 5.00 EUR (123456) SumUp  *Abc"),
+            ParsedPayeeMemo::from_str("SumUp", "PIRKUMS 0***1 28.12.2021 5.00 EUR (123456) SumUp  *Abc").payee,
             "Abc"
         );
     }
 
     #[test]
     fn test_izettle_payee() {
-        assert_eq!(fmt_payee("IZ *Payee222", "memo!"), "Payee222");
+        assert_eq!(ParsedPayeeMemo::from_str("IZ *Payee222", "memo!").payee, "Payee222");
     }
 
     #[test]
     fn test_gumroad_payee() {
-        assert_eq!(fmt_payee("GUM.CO/CC* Gumroad1", "memo!"), "Gumroad1");
+        assert_eq!(
+            ParsedPayeeMemo::from_str("GUM.CO/CC* Gumroad1", "memo!").payee,
+            "Gumroad1"
+        );
     }
 
     #[test]
     fn test_amazon_payee() {
-        assert_eq!(fmt_payee("AMZN Digital*Foo 111", "memo!"), "AMZN Digital");
+        assert_eq!(
+            ParsedPayeeMemo::from_str("AMZN Digital*Foo 111", "memo!").payee,
+            "AMZN Digital"
+        );
     }
 
     #[test]
     fn test_kindle_payee() {
         assert_eq!(
-            fmt_payee("Kindle Svcs*0F00T0000 00000 000-000-0000", "memo!"),
+            ParsedPayeeMemo::from_str("Kindle Svcs*0F00T0000 00000 000-000-0000", "memo!").payee,
             "Kindle Svcs"
         );
     }
 
     #[test]
     fn test_patreon_payee() {
-        assert_eq!(fmt_payee("Patreon* Membership", "memo!"), "Patreon");
-    }
-
-    #[test]
-    fn test_airbnb_payee() {
-        assert_eq!(fmt_payee("AIRBNB * FOOBAR 000 999-101-1111", "memo!"), "AIRBNB");
-    }
-
-    #[test]
-    fn test_escapable_payee() {
-        assert_eq!(fmt_payee("'Foobar", "Test"), "Foobar");
-    }
-
-    #[test]
-    fn test_makecommerce_payee() {
         assert_eq!(
-            fmt_payee(
-                "MakeCommerce",
-                "Maksekeskus/EE, st123, Actual Payee, Actual tx Memo, (123)"
-            ),
-            "Actual Payee"
+            ParsedPayeeMemo::from_str("Patreon* Membership", "memo!").payee,
+            "Patreon"
         );
     }
 
     #[test]
-    fn test_trustly_payee() {
-        assert_eq!(fmt_payee("Trustly Group AB", "1234 Seller Yo"), "Seller Yo");
+    fn test_airbnb_payee() {
+        assert_eq!(
+            ParsedPayeeMemo::from_str("AIRBNB * FOOBAR 000 999-101-1111", "memo!").payee,
+            "AIRBNB"
+        );
+    }
+
+    #[test]
+    fn test_escapable_payee() {
+        assert_eq!(ParsedPayeeMemo::from_str("'Foobar", "Test").payee, "Foobar");
     }
 
     #[test]
     fn test_revolut_payee() {
-        assert_eq!(fmt_payee("Revolut**1234* D02 R296 Dublin", "PIRKUMS 123******1234 01.08.2023 10.00 EUR (123) Revolut**1234* D02 R296 Dublin"), "Revolut")
+        assert_eq!(
+            ParsedPayeeMemo::from_str(
+                "Revolut**1234* D02 R296 Dublin",
+                "PIRKUMS 123******1234 01.08.2023 10.00 EUR (123) Revolut**1234* D02 R296 Dublin"
+            )
+            .payee,
+            "Revolut"
+        )
     }
 
     #[test]
     fn test_paysera_payee() {
         assert_eq!(
-            fmt_payee(
+            ParsedPayeeMemo::from_str(
                 "Paysera LT",
                 "R000 Pasutijums Nr. 14, projekts https://www.kartes.lv pardevejs: Jana seta"
-            ),
+            )
+            .payee,
             "Jana seta"
         );
-    }
-
-    #[test]
-    fn test_makecommerce_memo() {
-        assert_eq!(
-            fmt_memo(
-                "MakeCommerce",
-                "Maksekeskus/EE, st123, Actual Payee, Actual tx Memo99, (123)"
-            ),
-            Some(String::from("Actual tx Memo99"))
-        );
-    }
-
-    #[test]
-    fn test_trustly_memo() {
-        assert_eq!(
-            fmt_memo("Trustly Group AB", "1234 Seller Yo"),
-            Some(String::from("1234"))
-        );
-    }
-
-    #[test]
-    fn test_paysera_memo() {
-        assert_eq!(
-            fmt_memo(
-                "Paysera LT",
-                "R000 Pasutijums Nr. 14, projekts https://www.kartes.lv pardevejs: Jana seta"
-            ),
-            Some(String::from("R000 Pasutijums Nr. 14, projekts https://www.kartes.lv"))
-        )
     }
 
     #[test]
