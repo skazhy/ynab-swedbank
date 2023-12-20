@@ -33,7 +33,7 @@ fn drop_words(s: &str, splitter: &str, n: usize) -> String {
 lazy_static! {
     // Vector of well-known vendor names that can show up before the asterisk in the payee field.
     static ref VENDORS: Vec<&'static str> = {
-        vec!["AIRBNB", "AMZN Digital", "AUTOSTAVVIETA", "Patreon", "Kindle Svcs"]
+        vec!["AIRBNB", "AUTOSTAVVIETA", "Patreon", "Kindle Svcs"]
     };
 }
 
@@ -55,6 +55,7 @@ impl ParsedPayeeMemo {
             "MakeCommerce" => parse_makecommerce_memo(&sanitized_memo),
             "Trustly Group AB" => parse_trustly_memo(&sanitized_memo),
             "Paysera LT" => parse_paysera_memo(&sanitized_memo),
+            p if p.starts_with("AMZN") => (String::from("Amazon"), Some(String::from(&sanitized_memo))),
             "" => (String::from("Swedbank"), Some(String::from(&sanitized_memo))),
             _ => (
                 if let Some(vendor) = VENDORS.iter().find(|&&v| payee.starts_with(v)) {
@@ -283,7 +284,7 @@ mod tests {
     fn test_amazon_payee() {
         assert_eq!(
             ParsedPayeeMemo::from_str("AMZN Digital*Foo 111", "memo!").payee,
-            "AMZN Digital"
+            "Amazon"
         );
     }
 
