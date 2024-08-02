@@ -43,7 +43,7 @@ impl ParsedPayeeMemo {
         let mut date = None;
 
         if m.starts_with("PIRKUMS ") {
-            sanitized_memo = if m.contains(" VALŪTAS KURSS ") && m.contains(" KONVERTĀCIJAS MAKSA ") {
+            sanitized_memo = if is_foreign_currency_tx(m) {
                 drop_words(&sanitized_memo, " ", 13)
             } else {
                 drop_words(&sanitized_memo, " ", 6)
@@ -252,6 +252,23 @@ mod tests {
     #[test]
     fn test_absent_payee() {
         assert_eq!(ParsedPayeeMemo::from_str("", "Payment").payee, "Swedbank");
+    }
+
+    #[test]
+    fn test_basic_cc_payment() {
+        let r = ParsedPayeeMemo::from_str("Abc", "PIRKUMS 0***1 28.12.2021 5.00 EUR (123456) Abc");
+        assert_eq!(None, r.memo);
+        assert_eq!(String::from("Abc"), r.payee);
+    }
+
+    #[test]
+    fn test_foreign_currency_cc_payment() {
+        let r = ParsedPayeeMemo::from_str(
+            "Abc",
+            "PIRKUMS 0******1 30.07.24 13:07 24.90 CHF, ATTIECĪBĀ PRET ECB VALŪTAS KURSU 2.3% (123456) Abc",
+        );
+        assert_eq!(None, r.memo);
+        assert_eq!(String::from("Abc"), r.payee);
     }
 
     #[test]

@@ -55,6 +55,11 @@ pub fn is_loan_repayment(payment_type: &str) -> bool {
     payment_type == "AZA"
 }
 
+pub fn is_foreign_currency_tx(memo: &str) -> bool {
+    memo.contains(" VALŪTAS KURSS ") && memo.contains(" KONVERTĀCIJAS MAKSA ")
+        || memo.contains(" ATTIECĪBĀ PRET ECB VALŪTAS KURSU ")
+}
+
 // Known merchants of record
 
 pub fn parse_makecommerce_memo(memo: &str) -> (String, Option<String>) {
