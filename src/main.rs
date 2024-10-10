@@ -64,6 +64,7 @@ impl ParsedPayeeMemo {
                     match payee {
                         "SumUp" => String::from(sanitized_memo.trim_start_matches("SumUp *")),
                         p if p.starts_with("Revolut**") => String::from("Revolut"),
+                        p if p.starts_with("PAYPAL *") => parse_paypal_payee(p),
                         p if p.contains('*') => drop_words(payee, "*", 1).replace('\'', "").trim_start().to_string(),
                         p => String::from(p).replace('\'', ""),
                     }

@@ -70,11 +70,24 @@ pub fn parse_makecommerce_memo(memo: &str) -> (String, Option<String>) {
     )
 }
 
+pub fn parse_paypal_payee(p: &str) -> String {
+    let sanitized_str = p.replace("- ", "").replace("PAYPAL *", "");
+    let mut parts = sanitized_str.split(' ').collect::<Vec<&str>>();
+    parts.pop(); // Paypal payees end with 2 identifiers
+    parts.pop(); // That are irrelevant in formatted YNAB data.
+    parts.join(" ")
+}
+
 pub fn parse_trustly_memo(memo: &str) -> (String, Option<String>) {
-    memo.split_once(' ')
-        .map_or((String::from("Trustly Group AB"), Some(String::from(memo))), |s| {
-            (String::from(s.1), Some(String::from(s.0)))
-        })
+    let refund_memo = "Cross border transfer";
+    if refund_memo == memo {
+        (String::from("Trustly Group AB"), Some(String::from(refund_memo)))
+    } else {
+        memo.split_once(' ')
+            .map_or((String::from("Trustly Group AB"), Some(String::from(memo))), |s| {
+                (String::from(s.1), Some(String::from(s.0)))
+            })
+    }
 }
 
 pub fn parse_paysera_memo(memo: &str) -> (String, Option<String>) {
@@ -104,6 +117,14 @@ mod tests {
     }
 
     #[test]
+    fn test_trustly_refund_memo() {
+        assert_eq!(
+            parse_trustly_memo("Cross border transfer"),
+            (String::from("Trustly Group AB"), Some(String::from("Cross border transfer")))
+        );
+    }
+
+    #[test]
     fn test_paysera_memo() {
         assert_eq!(
             parse_paysera_memo("R000 Pasutijums Nr. 14, projekts https://www.kartes.lv pardevejs: Jana seta"),
@@ -111,6 +132,30 @@ mod tests {
                 String::from("Jana seta"),
                 Some(String::from("R000 Pasutijums Nr. 14, projekts https://www.kartes.lv"))
             )
+        );
+    }
+
+    #[test]
+    fn test_paypal_payee() {
+        assert_eq!(
+            parse_paypal_payee("PAYPAL *foobar L2449 00000000000"),
+            String::from("foobar")
+        );
+    }
+
+    #[test]
+    fn test_paypal_payee_spaces() {
+        assert_eq!(
+            parse_paypal_payee("PAYPAL *foo bar 0000 0000000000"),
+            String::from("foo bar")
+        );
+    }
+
+    #[test]
+    fn test_paypal_payee_dashed() {
+        assert_eq!(
+            parse_paypal_payee("PAYPAL *foo bar 181681- 12681 03029381240"),
+            String::from("foo bar")
         );
     }
 }
